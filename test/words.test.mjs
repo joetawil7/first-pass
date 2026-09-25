@@ -260,3 +260,46 @@ test('the reminder: due after enough new sessions, never for the default list, a
   fs.writeFileSync(path.join(config, 'CLAUDE.md'), block(`through ${new Date(Date.now() + 60_000).toISOString()} from 20 sessions`));
   assert.equal(wordsDue([root], env), null);
 });
+
+test('a stale profile block is reported even where the rules are current', () => {
+  const config = tempDir();
+  const repo = tempDir();
+  spawnSync('git', ['init', '-q', repo]);
+  const rules = (v) => `<!-- first-pass:rules:start v${v} -->\n<!-- first-pass:rules:end -->\n`;
+  const profile = (v) => `<!-- first-pass:profile:start v${v} -->\n<!-- first-pass:profile:end -->\n`;
+  const saved = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = config;
+  try {
+    // A teammate pulls a repo whose rules are current; their own profile (one-repo mode puts
+    // it in the user's CLAUDE.md) is from the release before.
+    fs.writeFileSync(path.join(repo, 'AGENTS.md'), rules('0.3.0'));
+    fs.writeFileSync(path.join(config, 'CLAUDE.md'), profile('0.2.0'));
+    assert.match(drift(null, { cwd: repo, source: 'startup' }, '0.3.0').join('\n'), /the profile block in .*CLAUDE\.md is v0\.2\.0 and the plugin is v0\.3\.0/);
+
+    fs.writeFileSync(path.join(config, 'CLAUDE.md'), profile('0.3.0'));
+    assert.doesNotMatch(drift(null, { cwd: repo, source: 'startup' }, '0.3.0').join('\n'), /the profile block in .* is v/);
+
+    // A current profile in the folder does not hide an old one in the global file: both load.
+    fs.writeFileSync(path.join(repo, 'AGENTS.md'), rules('0.3.0') + profile('0.3.0'));
+    fs.writeFileSync(path.join(config, 'CLAUDE.md'), profile('0.2.0'));
+    assert.match(drift(null, { cwd: repo, source: 'startup' }, '0.3.0').join('\n'), /the profile block in .*CLAUDE\.md is v0\.2\.0 and the plugin is v0\.3\.0/);
+
+    // The global copy is outside what a main folder's setup writes, so its line says what does fix it.
+    assert.match(drift(null, { cwd: repo, source: 'startup' }, '0.3.0').join(' '), /in one-repo mode updates it, or remove it/);
+
+    // An old profile in the folder's own file is one setup rewrites.
+    fs.writeFileSync(path.join(config, 'CLAUDE.md'), profile('0.3.0'));
+    fs.writeFileSync(path.join(repo, 'AGENTS.md'), rules('0.3.0') + profile('0.2.0'));
+    assert.match(drift(null, { cwd: repo, source: 'startup' }, '0.3.0').join(' '), /AGENTS.md is v0.2.0 and the plugin is v0.3.0; re-running setup-first-pass updates it[.]/);
+
+    // Rules and profile in one old file: one line asks for the re-run, not two.
+    fs.writeFileSync(path.join(config, 'CLAUDE.md'), profile('0.3.0'));
+    fs.writeFileSync(path.join(repo, 'AGENTS.md'), rules('0.2.0') + profile('0.2.0'));
+    const lines = drift(null, { cwd: repo, source: 'startup' }, '0.3.0').join('\n');
+    assert.match(lines, /the rules block in .* is v0\.2\.0/);
+    assert.doesNotMatch(lines, /the profile block in .* is v/);
+  } finally {
+    if (saved === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+    else process.env.CLAUDE_CONFIG_DIR = saved;
+  }
+});

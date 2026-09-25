@@ -53,13 +53,27 @@ by class:
 
 List every hit with file:line and a verdict: same bug, safe (why), or unsure.
 
-## 4. Fix or record every hit
+## 4. Pre-mortem the fix
+
+The fix is a change too, and it can break something the bug never touched: a lock that
+leaves an order stuck when the vendor fails, or a guard that also blocks a second payment
+the customer really meant. Before the first edit to the fix (the failing tests from step 1
+come first), run the `premortem` skill on the fix and on the fixes planned for the other
+hits, sized by its own rules. Its ten questions go against the fixed code, the bug's own
+question included: step 2 named it for the old code, and here the answer says what now
+stops the bug in every form it takes (for a double charge: two tabs, a retry, two
+instances). If a pre-mortem of this fix was written earlier in the session, point to it
+and add what it does not cover: the other hits' fixes, and anything about the fix that
+changed since. A pre-mortem of other work, such as the feature the bug is in, does not
+count.
+
+## 5. Fix or record every hit
 
 - Same bug and in scope: fix it, each with a failing-first test.
 - Same bug but out of scope: add it to `INVARIANTS.md` Known breaks (or the team's issue
   tracker) with file:line.
 
-## 5. Make it hard to do again
+## 6. Make it hard to do again
 
 Pick the strongest prevention that fits, and propose or build it:
 
@@ -73,7 +87,10 @@ Pick the strongest prevention that fits, and propose or build it:
 5. **A rule** in the project's instruction file, as a last resort: rules are advisory,
    checks are enforced.
 
-## 6. Finish with ship-check
+A prevention you build is part of the fix: add it to the step 4 pre-mortem before building
+it.
+
+## 7. Finish with ship-check
 
 Run the `ship-check` skill. The report adds:
 

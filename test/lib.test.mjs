@@ -197,7 +197,7 @@ test('done check: fires only for code changed this turn, with a claim and no Ver
 test('bridged hooks get less time than first-pass itself, on every event', () => {
   const hooks = JSON.parse(fs.readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')).hooks;
   for (const [event, limit] of Object.entries(EVENT_LIMITS)) {
-    assert.equal(hooks[event][0].hooks[0].timeout, limit, `${event} timeout in hooks.json`);
+    for (const group of hooks[event]) assert.equal(group.hooks[0].timeout, limit, `${event} timeout in hooks.json (${group.matcher ?? 'all'})`);
     assert.ok(effectiveTimeout({ timeout: 600 }, event) < limit);
   }
   assert.equal(effectiveTimeout({ timeout: 10 }, 'PreToolUse'), 10);

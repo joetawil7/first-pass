@@ -41,6 +41,35 @@ export function writeOffset(sessionId, name, offset) {
   fs.writeFileSync(path.join(dir, `offset-${name}`), String(offset));
 }
 
+// A small named JSON record for the session, or null when none was written.
+export function readRecord(sessionId, name) {
+  const file = path.join(sessionDir(sessionId), `${name}.json`);
+  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null;
+}
+
+export function writeRecord(sessionId, name, value) {
+  const dir = sessionDir(sessionId);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${name}.json`);
+  if (value === null) return fs.rmSync(file, { force: true });
+  // Written whole, then renamed: a half-written record would make every later hook in the
+  // session fail on it, repo hooks included.
+  const temp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, JSON.stringify(value));
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return fs.renameSync(temp, file);
+    } catch (error) {
+      // Windows refuses a rename onto a file another hook has open for a moment.
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code) || attempt >= 20) {
+        fs.rmSync(temp, { force: true });
+        throw error;
+      }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 + attempt * 5);
+    }
+  }
+}
+
 // True the first time `name` is raised in a session, false after: for notices that should
 // appear once per session, not on every tool call.
 export function firstTime(sessionId, name) {
@@ -63,10 +92,31 @@ export function removeOldSessions(maxAgeDays = 7) {
     if (!entry.isDirectory()) continue;
     const dir = path.join(root, entry.name);
     // Appending to a file does not touch its folder's mtime, so age is the newest file's.
-    const newest = Math.max(
-      fs.statSync(dir).mtimeMs,
-      ...fs.readdirSync(dir).map((name) => fs.statSync(path.join(dir, name)).mtimeMs),
-    );
+    // A live session renames and deletes its own files while this runs, so one can vanish
+    // between the listing and the stat.
+    const names = listing(dir);
+    if (names === null) continue;
+    const newest = Math.max(mtime(dir), ...names.map((name) => mtime(path.join(dir, name))));
     if (newest < cutoff) fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const VANISHED = new Set(['ENOENT', 'EPERM']);
+
+function listing(dir) {
+  try {
+    return fs.readdirSync(dir);
+  } catch (error) {
+    if (VANISHED.has(error.code)) return null;
+    throw error;
+  }
+}
+
+function mtime(file) {
+  try {
+    return fs.statSync(file).mtimeMs;
+  } catch (error) {
+    if (VANISHED.has(error.code)) return 0;
+    throw error;
   }
 }

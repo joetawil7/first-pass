@@ -1,8 +1,8 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "first-pass",
-  "version": "0.2.0",
-  "description": "Working rules and checks that make your coding agent look around a change, not only at the lines it writes: ten questions before code, a reviewer that didn't write it, proof before anything is called done, bugs fixed as a class, and your habit words mapped to real checks. Set up once for a folder of repos, or for one repo.",
+  "version": "0.3.0",
+  "description": "Working rules and checks that make your coding agent look around a change, not only at the lines it writes: ten questions before code, a reviewer that didn't write it, proof before anything is called done, bugs fixed as a class, your habit words mapped to real checks, and a sharpen command that rewrites a messy prompt before the work starts. Set up once for a folder of repos, or for one repo.",
   "author": {
     "name": "joetawil7",
     "url": "https://github.com/joetawil7"

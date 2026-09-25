@@ -136,7 +136,9 @@ test('the done check sends back a done claim with no Verified line', () => {
   fire('PostToolUse', edit('api/src/a.ts', { prompt_id: 'p2' }));
   const reply = fire('Stop', { prompt_id: 'p2', stop_hook_active: false, last_assistant_message: 'Fixed.' });
   assert.match(reply.hookSpecificOutput.additionalContext, /done check: this turn changed 1 code file\(s\) \(api\/src\/a\.ts\)/);
-  assert.equal(fire('Stop', { prompt_id: 'p2', stop_hook_active: false, last_assistant_message: 'Fixed.\nVerified: npm test → 3 passed' }), null);
+  // A prompt of its own: the done check fires once per prompt, so p2 would be quiet anyway.
+  fire('PostToolUse', edit('api/src/a.ts', { prompt_id: 'p2b' }));
+  assert.equal(fire('Stop', { prompt_id: 'p2b', stop_hook_active: false, last_assistant_message: 'Fixed.\nVerified: npm test → 3 passed' }), null);
 });
 
 test('a session hook sees every prompt and guards edits in any repo', () => {

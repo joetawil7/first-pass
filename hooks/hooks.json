@@ -1,5 +1,5 @@
 {
-  "description": "first-pass: runs approved repo hooks from a main folder, the done check, and the start-of-session drift check",
+  "description": "first-pass: runs approved repo hooks from a main folder, the done check, the start-of-session drift check, and sharpen's gate",
   "hooks": {
     "SessionStart": [
       {
@@ -17,7 +17,13 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|Skill|Agent|Task|SendMessage|Workflow|RunWorkflow|Artifact|RemoteTrigger|CronCreate",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs", "PreToolUse"], "timeout": 60 }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
         "hooks": [
           { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs", "PreToolUse"], "timeout": 60 }
         ]

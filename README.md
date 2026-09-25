@@ -64,10 +64,11 @@ first-pass names those checks, and asks for proof before anything is called done
 | `premortem` | The ten questions, answered against the code | Before code |
 | `breaker` (agent) | Fresh-context review of the diff and of every other path touching the same data; concrete findings only | Before done |
 | `ship-check` | The definition of done, ending in a report where every "Verified" line has its command and result | Before done |
-| `fix-the-class` | Reproduce, name the class, search for it everywhere, fix or record each hit, make it hard to repeat | On any bug |
+| `fix-the-class` | Reproduce, name the class, search for it everywhere, run the ten questions on the fix, fix or record each hit, make it hard to repeat | On any bug |
 | `setup-first-pass` | Writes the rules once, a map of your repos, and a section per repo with its real commands, test limits and a drafted `INVARIANTS.md` | Once, then to update |
 | `habit-words` | Reads what you typed in your recent sessions and maps words like "be 100% sure" to the checks they should mean | At setup, then when due |
-| Hooks | Run each repo's own hooks from the main folder, send back a "done" with no evidence, and say what drifted at session start | Every session |
+| `sharpen` | Rewrites the prompt you type after it: numbered asks, habit words turned into checks, names and numbers kept exactly. Shows you the rewrite, then works from it | Only when you type it |
+| Hooks | Run each repo's own hooks from the main folder, send back a "done" with no evidence, say what drifted at session start, and hold `sharpen`'s work until its rewrite is shown | Every session |
 
 ## If you keep all your repos in one folder
 
@@ -180,6 +181,15 @@ Cursor.
 Instead of "make sure it's bug free", try: *"Run the pre-mortem, show me the tests that fail
 without the change, and list what you didn't verify."*
 
+Or write the prompt the way you would anyway and put `/first-pass:sharpen` in front of it
+(`/sharpen` in Cursor). It splits a message that mixes three asks into a numbered list,
+turns the habit words into the checks they stand for, shows you the rewrite, and works from
+that. It stops to ask only when it would have to guess, and it never adds work you didn't
+ask for. In Claude Code a hook holds back edits, shell commands, subagents, MCP tools,
+publishing, scheduling and other skills until the rewrite is on screen (reading files is
+never held back): with the
+instruction alone, the rewrite was skipped in 7 of my 11 test runs.
+
 ## What it won't do
 
 - **It's slower per change.** A test that fails first, a second agent's review and CI in a
@@ -188,7 +198,7 @@ without the change, and list what you didn't verify."*
   (three reviewer passes). The trade is fewer rounds after "done". The pre-mortem scales
   with the change: a copy tweak answers it in one line.
 - **It won't make code bug free.** The aim is fewer and smaller escapes: no high-severity
-  ones, no bug class found twice. This is version 0.2, so that's the design, not a measured
+  ones, no bug class found twice. This is version 0.3, so that's the design, not a measured
   result yet.
 - **Rules alone fade.** The fixes that last are the ones `fix-the-class` pushes toward: a
   shared helper that's the only way to do a thing, a database constraint, a CI check.

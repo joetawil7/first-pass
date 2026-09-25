@@ -44,3 +44,16 @@ holds it today and where it is known to break.
    symbol (a long plain lowercase word) is kept; the skill is told never to quote one. Text a
    user types when rejecting a tool call is stored inside a tool result and is left out
    (its stored shape is not verified).
+9. **In a turn started with the sharpen command, edits, commands, subagents, MCP tools, publishing, scheduling and other skills wait until the rewrite is shown; the gate never holds a turn forever (after `MAX_REPLIES` replies, or `MAX_CALLS` denied calls in all as a backstop for a transcript that is missing or not being written, the work goes on and the user is told); and it never takes a check away from the rest of the turn: the done check and repo hooks see the Stop after its send-back as a first Stop, and a failure inside the gate becomes a `systemMessage` while everything else runs.**
+   Held by: `armSharpen`, `sharpenGate`, `sharpenStopView` and `sharpenStop` in
+   `scripts/lib/sharpen-gate.mjs`; `sharpenStep` in `scripts/hooks.mjs`; `writeRecord` in
+   `scripts/lib/state.mjs` (write, rename, retry on Windows' EPERM); `test/sharpen.test.mjs`.
+   Known breaks: Claude Code plugin only; Cursor, other tools and a skills-only install run
+   no hooks, so there it is the skill's instruction alone. Stop hooks Claude Code runs
+   itself (a repo's own when the session starts inside that repo, other plugins', the
+   user's global ones) see `stop_hook_active` on after a sharpen send-back, and one that
+   skips on it misses the Stop that ends the work; only first-pass's own input can be
+   changed. Parallel tool calls can each read the same record and one update can be lost.
+   Past 10 gated calls per reply, the `MAX_CALLS` backstop can end the hold a reply early.
+   A tool Claude Code adds later is free until it is named in `GATED_TOOLS` and hooks.json.
+   Writing the word "Sharpened" releases it: it is a nudge, not a lock.

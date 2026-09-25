@@ -2,11 +2,11 @@
 // first-pass hooks. Claude Code runs this once per event (see hooks/hooks.json) with the
 // event's JSON on stdin; it prints at most one JSON reply.
 //   SessionStart      the drift check, plus approved session hooks
-//   UserPromptSubmit  approved session hooks
-//   PreToolUse        approved hooks for the tool's repo
+//   UserPromptSubmit  arms or ends sharpen's gate, then approved session hooks
+//   PreToolUse        sharpen's gate, then approved hooks for the tool's repo
 //   PostToolUse       notes which file changed, then approved hooks for its repo
-//   Stop              approved hooks for each repo edited since their last run, and the
-//                     done check
+//   Stop              approved hooks for each repo edited since their last run, the
+//                     done check and sharpen's check
 // With no `.first-pass/workspace.json` above the session there are no approved hooks:
 // the done check and the drift check still run.
 import fs from 'node:fs';
@@ -17,10 +17,15 @@ import { doneCheck } from './lib/done-check.mjs';
 import { drift } from './lib/drift.mjs';
 import { merge } from './lib/merge.mjs';
 import { gitRoot, key, relative } from './lib/paths.mjs';
+import { armSharpen, sharpenGate, sharpenStop, sharpenStopView } from './lib/sharpen-gate.mjs';
 import { appendEdit, firstTime, readEdits, readOffset, removeOldSessions, writeOffset } from './lib/state.mjs';
 import { findWorkspace, repoOf } from './lib/workspace.mjs';
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
+// hooks/hooks.json sends these to PreToolUse for sharpen's gate only; repo hooks never saw
+// them before the gate existed, so they still do not.
+const GATE_ONLY_TOOLS = new Set(['Skill', 'Agent', 'Task', 'SendMessage', 'Workflow', 'RunWorkflow', 'Artifact', 'RemoteTrigger', 'CronCreate']);
+const gateOnly = (tool) => GATE_ONLY_TOOLS.has(tool) || String(tool).startsWith('mcp__');
 const CONTEXT_EVENTS = new Set(['SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop']);
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -65,28 +70,57 @@ function pausedNotice(event, outcome) {
   return { name: outcome.name, own: true, json };
 }
 
+// sharpen's gate is a nudge: if it fails, the user is told and everything else still runs,
+// repo hooks included, instead of the whole hook failing with it.
+function sharpenFailed(error) {
+  return { name: 'first-pass sharpen', own: true, json: { systemMessage: `first-pass: sharpen's gate failed and was skipped for this step (${error.message}).` } };
+}
+
+function sharpenStep(step, input) {
+  try {
+    return step(input) ?? null;
+  } catch (error) {
+    return sharpenFailed(error);
+  }
+}
+
 async function main() {
   const event = process.argv[2];
-  const input = JSON.parse(fs.readFileSync(0, 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(0, 'utf8'));
+  const results = [];
+  // At Stop, what the done check and repo hooks see (see sharpenStopView).
+  let input = raw;
+  if (event === 'Stop') {
+    try {
+      input = sharpenStopView(raw);
+    } catch (error) {
+      results.push(sharpenFailed(error));
+    }
+  }
   const projectDir = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
   const ws = findWorkspace(projectDir);
   // A session started inside a listed repo gets that repo's own hooks from Claude Code.
   const startRepo = ws ? repoOf(ws, projectDir) : null;
   const edits = event === 'Stop' ? readEdits(input.session_id) : [];
-  const results = [];
 
   if (event === 'SessionStart') {
     removeOldSessions();
     const lines = drift(ws, input, pluginVersion());
     if (lines.length) results.push({ name: 'first-pass drift check', own: true, json: { hookSpecificOutput: { hookEventName: event, additionalContext: lines.join('\n') } } });
   }
+  const sharpenSteps = { UserPromptSubmit: armSharpen, PreToolUse: sharpenGate, Stop: sharpenStop };
   if (event === 'PostToolUse') recordEdit(input, ws);
   if (event === 'Stop') {
+    // Once per prompt: sharpen's view can show a later Stop in the same turn as a first one.
     const done = doneCheck(input, edits);
-    if (done) results.push(done);
+    if (done && firstTime(input.session_id, `done-${input.prompt_id}`)) results.push(done);
+  }
+  if (sharpenSteps[event]) {
+    const sharpen = sharpenStep(sharpenSteps[event], input);
+    if (sharpen) results.push(sharpen);
   }
 
-  if (ws) {
+  if (ws && !(event === 'PreToolUse' && gateOnly(input.tool_name))) {
     const runs = selectRuns(event, input, ws, editedSince(input.session_id, edits), startRepo);
     // Moved on before the hooks run, so a hook that hangs is not re-run on every later Stop.
     if (event === 'Stop') {
