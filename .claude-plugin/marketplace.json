@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "first-pass",
-      "description": "Pre-mortem before code, fresh adversarial review, evidence-based definition of done, and fix-the-class bug routine.",
+      "description": "Makes your coding agent look around a change: ten questions before code, a reviewer that didn't write it, proof before done, bugs fixed as a class, and your habit words mapped to real checks.",
       "source": "./",
       "category": "development"
     }

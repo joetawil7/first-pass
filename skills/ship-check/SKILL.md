@@ -6,9 +6,21 @@ description: The definition of done. Run before calling any change done, fixed, 
 # ship-check
 
 Walk every step. A step you cannot do goes in the report under "Not verified" with the
-reason; it is never skipped silently. The project's commands are in the `first-pass:project`
-block of its instruction file (AGENTS.md or CLAUDE.md); if there is none, read them from
-the CI config and say so in the report.
+reason; it is never skipped silently. The repo's commands, test limits and heavy-run rules
+are in the `first-pass:project` block of its instruction file (AGENTS.md or CLAUDE.md); if
+there is none, read them from the CI config and say so in the report. Its test limits bind
+every step below.
+
+Run everything inside the repo that changed (`cd <repo>`, `git -C <repo>`), not from a main
+folder above it. A change that spans repos walks the steps once per repo.
+
+## 0. Size
+
+A change with no logic in it (a comment, a doc, a spelling fix that changes no behaviour)
+runs only the repo's format, lint and build checks, plus step 6 when a person reads the
+text, and the report says this exception was used. Anything else, however small (a
+constant, a condition, a default, a price, a label whose meaning changes), walks every step.
+When unsure, it is not a typo.
 
 ## 1. Pre-mortem
 
@@ -30,8 +42,11 @@ For each behaviour the change adds or fixes, and each pre-mortem answer of the "
    (`git merge-base HEAD origin/<main branch>`). Never a checkout that already contains
    the change, or good tests pass on the "old" code and look worthless.
    ```
-   git worktree add --detach ../<repo>-shipcheck <base>
+   git -C <repo> worktree add --detach "<temp dir>/<repo>-shipcheck-<short base sha>-<time>" <base>
    ```
+   Put it in the system temp folder, not beside the repo (a new folder inside a main folder
+   looks like a new repo to every tool that scans it), under a name no parallel session
+   will pick.
    Copy in only the new or changed test files, install dependencies as CI does, run them,
    and record which fail and why. Then copy in the change and record that they pass. A test
    that passes on the old code proves nothing about the change: rewrite it.
@@ -45,11 +60,11 @@ For each behaviour the change adds or fixes, and each pre-mortem answer of the "
 
 ## 3. Fresh review
 
-Hand the change to the `breaker` agent (Claude Code: `breaker`, or `first-pass:breaker`
-from the plugin; Cursor: `/breaker`) with what the change is for, the base ref or file
-list, and the pre-mortem. It must run in its own context. If your tool cannot start one,
-ask the user to run the breaker in a new chat; never review in the context that wrote the
-code.
+Hand the change to the `breaker` agent (Claude Code: `first-pass:breaker` from the plugin,
+or `breaker` where a repo installed its own; Cursor: `/breaker`) with what the change is
+for, the repo, the base ref or file list, and the pre-mortem. It must run in its own
+context. If your tool cannot start one, ask the user to run the breaker in a new chat;
+never review in the context that wrote the code.
 
 For each finding:
 
@@ -68,7 +83,7 @@ touches; the whole integration suite when the change touches jobs, payments, pub
 deletion or auth). Follow the project's rules for heavy runs.
 
 A failure that also happens on the base without the change is pre-existing: name the test
-and move on. Then remove the worktree (`git worktree remove --force <path>`) and any leftovers,
+and move on. Then remove the worktree (`git -C <repo> worktree remove --force <path>`) and any leftovers,
 including copied env files.
 
 ## 5. Monitoring

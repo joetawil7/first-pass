@@ -35,7 +35,7 @@ jobs:
       - name: Skills and the agent the rules name exist
         run: |
           status=0
-          for s in premortem ship-check fix-the-class setup-first-pass; do
+          for s in premortem ship-check fix-the-class setup-first-pass habit-words; do
             [ -f "skills/$s/SKILL.md" ] || { echo "::error::skills/$s/SKILL.md is referenced but missing"; status=1; }
           done
           [ -f skills/setup-first-pass/assets/breaker.md ] || { echo "::error::breaker agent missing"; status=1; }
@@ -48,16 +48,44 @@ jobs:
             n=$(grep -c "$2" "$1")
             if [ "$n" != 1 ]; then echo "::error file=$1::'$2' appears $n times, expected 1"; status=1; fi
           }
-          check skills/setup-first-pass/assets/rules-block.md 'first-pass:rules:start'
-          check skills/setup-first-pass/assets/rules-block.md 'first-pass:rules:end'
-          check skills/setup-first-pass/assets/project-block.md 'first-pass:project:start'
-          check skills/setup-first-pass/assets/project-block.md 'first-pass:project:end'
+          for block in rules profile words workspace project; do
+            check "skills/setup-first-pass/assets/$block-block.md" "first-pass:$block:start"
+            check "skills/setup-first-pass/assets/$block-block.md" "first-pass:$block:end"
+          done
           exit $status
 
-      - name: Rules block version matches plugin.json
+      - name: Managed block versions match plugin.json
         run: |
           v=$(node -p "require('./.claude-plugin/plugin.json').version")
-          if ! grep -q "first-pass:rules:start v$v " skills/setup-first-pass/assets/rules-block.md; then
-            echo "::error::rules-block.md version does not match plugin.json $v"
-            exit 1
+          status=0
+          for block in rules profile words; do
+            if ! grep -q "first-pass:$block:start v$v " "skills/setup-first-pass/assets/$block-block.md"; then
+              echo "::error::$block-block.md version does not match plugin.json $v"; status=1
+            fi
+          done
+          exit $status
+
+      - name: Hooks point at scripts that exist
+        run: |
+          node -e '
+            const hooks = require("./hooks/hooks.json").hooks;
+            const fs = require("fs");
+            let bad = 0;
+            for (const [event, groups] of Object.entries(hooks)) for (const g of groups) for (const h of g.hooks) {
+              for (const arg of h.args ?? []) {
+                const file = arg.replace("${CLAUDE_PLUGIN_ROOT}/", "");
+                if (arg.includes("${CLAUDE_PLUGIN_ROOT}") && !fs.existsSync(file)) { console.log(`::error::${event} hook runs ${file}, which is missing`); bad = 1; }
+              }
+            }
+            process.exit(bad);'
+
+      - name: Tests
+        run: node --test test/*.test.mjs
+
+      # The projects first-pass came from stay private. The pattern is split so this file
+      # does not match itself.
+      - name: No private project names
+        run: |
+          if git grep -n -i -E 'brand[i]os|prop[w]ise|prop[i]lot'; then
+            echo "::error::a private project name is in the repo"; exit 1
           fi

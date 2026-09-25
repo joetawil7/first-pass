@@ -32,7 +32,10 @@ State the pattern in one sentence that can be searched for, for example:
 
 ## 3. Search for the pattern
 
-Search the whole codebase for other instances. Examples by class:
+Search the whole codebase for other instances: the repo, and in a main folder every repo
+the workspace section says shares the code, data or vendor (the same bug is often copied
+between a web app and a mobile app, or between two services calling one vendor). Examples
+by class:
 
 - **Twice**: read-then-write on the same row (`find` then `update` without a lock or
   conditional `WHERE`), counts compared to limits before inserting.

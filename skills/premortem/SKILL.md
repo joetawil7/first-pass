@@ -29,6 +29,12 @@ answer is one of three things, and nothing else counts:
 List every field or column, status value, option key, queue or topic, cron, event, endpoint,
 DTO property and outside service the change reads or writes. This list drives questions 1 to 10.
 
+Name the repo each item lives in. In a main folder with many repos, the workspace section of
+the root `AGENTS.md` or `CLAUDE.md` says which repos use this one (a web app and a mobile app
+calling an API, a website quoting the app's prices): their readers are neighbors too. Read
+the repo's own section (its `first-pass:project` block) for extra cases and for the same job
+done in two places.
+
 ## 1. Twice
 
 What happens when this runs two times: double-click, two tabs, the client retrying, the
@@ -76,12 +82,12 @@ For every call to another service (API, vendor, email, payment, storage, model):
 ## 5. Neighbors
 
 For every item on the map from step 0, search the whole repo (backend, frontend, workers,
-scripts, migrations, tests, docs) for other readers and writers:
+scripts, migrations, tests, docs) and every repo that uses it for other readers and writers:
 
 ```
-grep -rn "<column_or_field>" --include=*.<ext> .
-grep -rn "'<status_value>'" .
-grep -rn "<queue_or_event_name>" .
+grep -rn "<column_or_field>" --include=*.<ext> <repo> <each repo that uses it>
+grep -rn "'<status_value>'" <repo>
+grep -rn "<queue_or_event_name>" <repo> <each repo that uses it>
 ```
 
 List each neighbor in the plan and say what it needs: nothing (why), a change, or a test.
