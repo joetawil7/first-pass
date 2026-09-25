@@ -35,7 +35,7 @@ jobs:
       - name: Skills and the agent the rules name exist
         run: |
           status=0
-          for s in premortem ship-check fix-the-class setup-first-pass habit-words sharpen; do
+          for s in premortem ship-check fix-the-class setup-first-pass habit-words sharpen review; do
             [ -f "skills/$s/SKILL.md" ] || { echo "::error::skills/$s/SKILL.md is referenced but missing"; status=1; }
           done
           [ -f skills/setup-first-pass/assets/breaker.md ] || { echo "::error::breaker agent missing"; status=1; }

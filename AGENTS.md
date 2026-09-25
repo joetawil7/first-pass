@@ -14,7 +14,11 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   (`scripts/lib/words.mjs`). The `sharpen` skill runs only when the user types it
   (`disable-model-invocation`) and rewrites the prompt given with it; its gate
   (`scripts/lib/sharpen-gate.mjs`) holds back edits, shell commands, subagents, MCP tools,
-  publishing, scheduling and other skills until the rewrite is shown.
+  publishing, scheduling and other skills until the rewrite is shown. The `review` skill,
+  also typed by hand, reviews the user's own branch (nothing typed) or someone else's PRs
+  through the breaker, never posts to GitHub or the ticket, runs a fork's or an outside
+  author's code only on a yes, and fixes and pushes only what the user picks after the
+  report.
 - **CI's checks** (`.github/workflows/validate.yml`, job `validate`): `claude plugin validate
   --strict .` and on `.claude-plugin/plugin.json` (Claude Code pinned to 2.1.280), skill names
   match folders, every block has one start and one end marker, the rules, profile and words

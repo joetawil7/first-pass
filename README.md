@@ -1,11 +1,39 @@
 # first-pass
 
-Working rules and checks for Claude Code (and Cursor, Codex and other agents) that make
-the agent look around a change, not only at the lines it writes. Set it up once in the
-folder that holds your repos.
-
 [![validate](https://github.com/joetawil7/first-pass/actions/workflows/validate.yml/badge.svg)](https://github.com/joetawil7/first-pass/actions/workflows/validate.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+first-pass makes a coding agent check the code around a change, not only the lines it
+writes, and prove its work before it calls anything done. It's a Claude Code plugin;
+Cursor, Codex and other agents get the same rules and skills (the hooks are Claude Code
+only). You set it up once, in the folder that holds your repos.
+
+**What it does**
+
+- **Before code,** the agent answers ten questions about the change against the real code:
+  what happens if it runs twice, stops halfway, or an outside service times out; which
+  other code uses the same data; what the user sees when it fails. Each answer is a
+  `file:line`, a test, or a gap you decide to accept.
+- **Before "done",** a second agent that didn't write the code reviews it in a fresh
+  context. "Done" needs a test that failed before the change and CI's checks passing in a
+  clean checkout; anything less is reported as built, not done.
+- **On a bug,** it fixes the whole class: it reproduces the bug, finds the same pattern
+  elsewhere, and adds the check that stops it coming back.
+- **On a pull request,** `/first-pass:review` checks your own branch before you ask for
+  review, or a teammate's PRs across several repos. Every finding comes with its proof or
+  is marked unproven, and it never posts to GitHub.
+- **In every session,** hooks send back a "done" that has no evidence behind it, run each
+  repo's own hooks from the shared folder, and say what drifted since setup.
+
+**What it helps with**
+
+- Bugs next to the change: the other code path that writes the same field, the webhook
+  that arrives twice, the error that shows up as an empty list.
+- "Fixed" and "verified" that only meant "it compiles and the mocks pass".
+- An agent reviewing its own work in the same context that wrote it.
+- Many repos opened from one folder, where each repo's own rules and hooks don't load.
+- Prompts like "be 100% sure", which change how sure the answer sounds, not what gets
+  checked.
 
 ```
 /plugin marketplace add joetawil7/first-pass
@@ -68,6 +96,7 @@ first-pass names those checks, and asks for proof before anything is called done
 | `setup-first-pass` | Writes the rules once, a map of your repos, and a section per repo with its real commands, test limits and a drafted `INVARIANTS.md` | Once, then to update |
 | `habit-words` | Reads what you typed in your recent sessions and maps words like "be 100% sure" to the checks they should mean | At setup, then when due |
 | `sharpen` | Rewrites the prompt you type after it: numbered asks, habit words turned into checks, names and numbers kept exactly. Shows you the rewrite, then works from it | Only when you type it |
+| `review` | Reviews your own branch before you ask for review (type nothing after it), or a teammate's PRs, several repos at once. Checks the change against its ticket, judges the failed checks and every Bugbot comment, runs the breaker, traces the other code that uses what changed, proves each finding or marks it unproven, and says what the merge needs and how to check the deploy. Reads GitHub and never posts; pushes a fix only on your yes | Only when you type it |
 | Hooks | Run each repo's own hooks from the main folder, send back a "done" with no evidence, say what drifted at session start, and hold `sharpen`'s work until its rewrite is shown | Every session |
 
 ## If you keep all your repos in one folder
@@ -177,6 +206,18 @@ Cursor.
    `Verified: <command> → <result>` and what wasn't verified.
 4. **Bug.** `fix-the-class` fixes the one you found, the others like it, and adds the check
    that stops the next one.
+5. **Review.** On your own branch, `/first-pass:review` with nothing after it reviews your
+   work against its base, its PR, its checks and the ticket in the branch name, and ends
+   with what to fix before you ask for review. On a teammate's PR, add the links and what's
+   live, for example *"/first-pass:review backend#147 web#151, live today: no agency
+   workspaces"*: the same checks, plus a message you can send the developer. Every finding
+   comes with its proof, or is marked unproven, and says whether users can hit it today. A
+   PR from a fork or an outside contributor is read, never run, unless you say yes, since
+   running it would run a stranger's code with your logins. The report also says what
+   changes for users, what the merge needs (a new app build, env vars, migrations, deploy
+   order), what to check after the deploy, and which of the ten questions and which
+   neighboring code were checked. It reads GitHub but never posts, and it fixes something
+   only when you pick it after the report.
 
 Instead of "make sure it's bug free", try: *"Run the pre-mortem, show me the tests that fail
 without the change, and list what you didn't verify."*
