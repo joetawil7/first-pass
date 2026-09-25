@@ -1,0 +1,63 @@
+name: validate
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Pinned so a validator release cannot turn CI red with no change here. Bump on purpose.
+      - name: Plugin and marketplace manifests
+        run: |
+          npm install -g @anthropic-ai/claude-code@2.1.280
+          claude plugin validate --strict .
+          claude plugin validate --strict .claude-plugin/plugin.json
+
+      - name: Every skill has a name matching its folder and a description
+        run: |
+          status=0
+          for f in skills/*/SKILL.md; do
+            dir=$(basename "$(dirname "$f")")
+            name=$(sed -n 's/^name: *//p' "$f" | head -1)
+            desc=$(sed -n 's/^description: *//p' "$f" | head -1)
+            if [ "$name" != "$dir" ]; then echo "::error file=$f::name '$name' does not match folder '$dir'"; status=1; fi
+            if [ -z "$desc" ]; then echo "::error file=$f::missing description"; status=1; fi
+          done
+          exit $status
+
+      - name: Skills and the agent the rules name exist
+        run: |
+          status=0
+          for s in premortem ship-check fix-the-class setup-first-pass; do
+            [ -f "skills/$s/SKILL.md" ] || { echo "::error::skills/$s/SKILL.md is referenced but missing"; status=1; }
+          done
+          [ -f skills/setup-first-pass/assets/breaker.md ] || { echo "::error::breaker agent missing"; status=1; }
+          exit $status
+
+      - name: Each block has exactly one start and one end marker
+        run: |
+          status=0
+          check() {
+            n=$(grep -c "$2" "$1")
+            if [ "$n" != 1 ]; then echo "::error file=$1::'$2' appears $n times, expected 1"; status=1; fi
+          }
+          check skills/setup-first-pass/assets/rules-block.md 'first-pass:rules:start'
+          check skills/setup-first-pass/assets/rules-block.md 'first-pass:rules:end'
+          check skills/setup-first-pass/assets/project-block.md 'first-pass:project:start'
+          check skills/setup-first-pass/assets/project-block.md 'first-pass:project:end'
+          exit $status
+
+      - name: Rules block version matches plugin.json
+        run: |
+          v=$(node -p "require('./.claude-plugin/plugin.json').version")
+          if ! grep -q "first-pass:rules:start v$v " skills/setup-first-pass/assets/rules-block.md; then
+            echo "::error::rules-block.md version does not match plugin.json $v"
+            exit 1
+          fi

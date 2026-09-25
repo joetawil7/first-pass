@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "first-pass",
+  "version": "0.1.0",
+  "description": "Ship it right on the first pass: a pre-mortem before code, a fresh adversarial reviewer, a definition of done that demands evidence, and a bug routine that fixes the whole class.",
+  "author": {
+    "name": "joetawil7",
+    "url": "https://github.com/joetawil7"
+  },
+  "homepage": "https://github.com/joetawil7/first-pass",
+  "repository": "https://github.com/joetawil7/first-pass",
+  "license": "MIT",
+  "keywords": ["quality", "code-review", "testing", "pre-mortem", "definition-of-done"],
+  "agents": ["./skills/setup-first-pass/assets/breaker.md"]
+}

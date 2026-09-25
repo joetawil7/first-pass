@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "first-pass",
+  "description": "Ship it right on the first pass.",
+  "owner": {
+    "name": "joetawil7",
+    "url": "https://github.com/joetawil7"
+  },
+  "plugins": [
+    {
+      "name": "first-pass",
+      "description": "Pre-mortem before code, fresh adversarial review, evidence-based definition of done, and fix-the-class bug routine.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}
