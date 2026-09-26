@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
-import { key } from './paths.mjs';
+import { pathKey } from './paths.mjs';
 
 export const WORDS_FILE = /^first-pass-words-[0-9a-f]{12}\.md$/;
 
@@ -360,7 +360,7 @@ export function writeWordsFile(result) {
 // error, so a mistyped name never reads as "deleted" while the real file stays.
 export function deleteWordsFile(file) {
   const abs = path.resolve(file);
-  if (!WORDS_FILE.test(path.basename(abs)) || key(path.dirname(abs)) !== key(os.tmpdir())) {
+  if (!WORDS_FILE.test(path.basename(abs)) || pathKey(path.dirname(abs)) !== pathKey(os.tmpdir())) {
     throw new Error(`${file} is not a words file first-pass wrote; nothing deleted`);
   }
   if (!gone(() => fs.lstatSync(abs))?.isFile()) throw new Error(`${file} was not found; nothing deleted`);

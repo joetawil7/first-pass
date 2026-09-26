@@ -2,7 +2,7 @@
 // hook reads, so no repo name is ever hard-coded.
 import fs from 'node:fs';
 import path from 'node:path';
-import { isInside, key } from './paths.mjs';
+import { isInside, pathKey } from './paths.mjs';
 
 export const CONFIG_PATH = path.join('.first-pass', 'workspace.json');
 
@@ -50,7 +50,7 @@ export function loadWorkspace(root) {
 export function repoOf(ws, file) {
   let best = null;
   for (const repo of ws.repos) {
-    if (isInside(file, repo.abs) && (!best || key(repo.abs).length > key(best.abs).length)) best = repo;
+    if (isInside(file, repo.abs) && (!best || pathKey(repo.abs).length > pathKey(best.abs).length)) best = repo;
   }
   return best;
 }

@@ -152,7 +152,12 @@ What it reads and keeps:
 - A small state folder in `~/.claude/plugins/data/` for the hooks, and a temp file while
   `habit-words` runs, deleted when it's done.
 
-It never commits, pushes or sends anything anywhere. You review the files and commit them.
+Setup never commits, pushes or sends anything anywhere: you review the files and commit
+them. The plugin's own scripts make no network calls and read no keys or tokens from your
+environment. The only
+skill that reaches a server is `review`: it reads the PRs, checks and comments through
+your own `gh` login, and it pushes a fix only when you picked that fix and said yes to the
+push.
 
 ## Install
 

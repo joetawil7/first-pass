@@ -10,7 +10,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { whyPaused } from './fingerprint.mjs';
-import { gitRoot, key, posix } from './paths.mjs';
+import { gitRoot, pathKey, posix } from './paths.mjs';
 import { repoNamed, repoOf } from './workspace.mjs';
 
 // Must equal the timeouts in hooks/hooks.json (a test checks). A bridged hook gets a little
@@ -106,8 +106,8 @@ export function selectRuns(event, input, ws, edited, startRepo = null) {
       const seen = new Set();
       for (const { repo: name, root } of edited(hook)) {
         const repo = repoNamed(ws, name);
-        if (!repo || !hook.repos.includes(name) || nativelyCovered(hook, repo, startRepo) || seen.has(key(root))) continue;
-        seen.add(key(root));
+        if (!repo || !hook.repos.includes(name) || nativelyCovered(hook, repo, startRepo) || seen.has(pathKey(root))) continue;
+        seen.add(pathKey(root));
         runs.push({ hook, repo, cwd: root });
       }
     }

@@ -8,7 +8,7 @@ import { ciCommands, ciFiles } from './ci.mjs';
 import { checkCursorRules, imports } from './cursor-rules.mjs';
 import { entryFiles } from './fingerprint.mjs';
 import { loadProblems, sameInstructionFile } from './instructions.mjs';
-import { key, posix, relative } from './paths.mjs';
+import { pathKey, posix, relative } from './paths.mjs';
 import { findRepos } from './repos.mjs';
 
 const UI_DEPS = ['react', 'react-dom', 'next', 'vue', 'nuxt', 'svelte', '@sveltejs/kit', '@angular/core', 'solid-js', 'astro', 'react-native', 'expo', '@remix-run/react', 'preact', 'lit'];
@@ -213,7 +213,7 @@ export function surveyWorkspace(root) {
   const workspaceFolders = codeWorkspaceFolders(root);
   // The main folder may list itself (".") and may be a git repo of its own: it is not one of its repos.
   const extra = workspaceFolders.filter(
-    (f) => f.path && key(f.path) !== key(root) && fs.existsSync(path.join(f.path, '.git')) && !repoDirs.some((d) => key(d) === key(f.path)),
+    (f) => f.path && pathKey(f.path) !== pathKey(root) && fs.existsSync(path.join(f.path, '.git')) && !repoDirs.some((d) => pathKey(d) === pathKey(f.path)),
   );
   const rootSettings = ['settings.json', 'settings.local.json'].map((n) => ({ file: `.claude/${n}`, json: readJson(path.join(root, '.claude', n)) })).filter((s) => s.json);
   return {

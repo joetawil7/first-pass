@@ -9,7 +9,7 @@ import { ciHash } from './ci.mjs';
 import { checkCursorRules } from './cursor-rules.mjs';
 import { whyPaused } from './fingerprint.mjs';
 import { loadProblems, repoHooksHash } from './instructions.mjs';
-import { gitRoot, key, relative } from './paths.mjs';
+import { gitRoot, pathKey, relative } from './paths.mjs';
 import { findRepos } from './repos.mjs';
 import { hasTypedPrompt, projectsDir, sessionFiles } from './words.mjs';
 import { repoNamed } from './workspace.mjs';
@@ -136,10 +136,10 @@ export function drift(ws, input, pluginVersion) {
   if (fresh) add(wordsDue([ws.root]));
   for (const problem of checkCursorRules(ws.root)) add(`first-pass: the workspace: ${problem}.`);
 
-  const known = new Set(ws.repos.map((repo) => key(repo.abs)));
-  const ignored = new Set((ws.config.ignore ?? []).map((name) => key(path.resolve(ws.root, name))));
+  const known = new Set(ws.repos.map((repo) => pathKey(repo.abs)));
+  const ignored = new Set((ws.config.ignore ?? []).map((name) => pathKey(path.resolve(ws.root, name))));
   for (const dir of findRepos(ws.root)) {
-    if (!known.has(key(dir)) && !ignored.has(key(dir))) {
+    if (!known.has(pathKey(dir)) && !ignored.has(pathKey(dir))) {
       add(`first-pass: ${relative(ws.root, dir)} is a git repo in the workspace that workspace.json does not list; it has no first-pass section yet.`);
     }
   }

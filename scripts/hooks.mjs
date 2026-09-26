@@ -16,7 +16,7 @@ import { runHook, selectRuns, toolTarget } from './lib/bridge.mjs';
 import { doneCheck } from './lib/done-check.mjs';
 import { drift } from './lib/drift.mjs';
 import { merge } from './lib/merge.mjs';
-import { gitRoot, key, relative } from './lib/paths.mjs';
+import { gitRoot, pathKey, relative } from './lib/paths.mjs';
 import { armSharpen, sharpenGate, sharpenStop, sharpenStopView } from './lib/sharpen-gate.mjs';
 import { appendEdit, firstTime, readEdits, readOffset, removeOldSessions, writeOffset } from './lib/state.mjs';
 import { findWorkspace, repoOf } from './lib/workspace.mjs';
@@ -55,7 +55,7 @@ function editedSince(sessionId, edits) {
   return (hook) => {
     const out = new Map();
     for (const edit of edits.slice(readOffset(sessionId, hook.id))) {
-      if (edit.repo) out.set(`${edit.repo}\0${key(edit.root)}`, { repo: edit.repo, root: edit.root });
+      if (edit.repo) out.set(`${edit.repo}\0${pathKey(edit.root)}`, { repo: edit.repo, root: edit.root });
     }
     return [...out.values()];
   };

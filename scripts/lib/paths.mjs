@@ -1,17 +1,17 @@
 // Path helpers shared by the hooks and the setup CLI. Windows paths compare
 // case-insensitively and may arrive with either slash, so every comparison goes
-// through key().
+// through pathKey().
 import fs from 'node:fs';
 import path from 'node:path';
 
-export function key(p) {
+export function pathKey(p) {
   const resolved = path.resolve(p);
   return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }
 
 export function isInside(file, dir) {
-  const f = key(file);
-  const d = key(dir);
+  const f = pathKey(file);
+  const d = pathKey(dir);
   return f === d || f.startsWith(d.endsWith(path.sep) ? d : d + path.sep);
 }
 
@@ -21,7 +21,7 @@ export function gitRoot(start, stopAt) {
   let dir = isDirectory(start) ? path.resolve(start) : path.dirname(path.resolve(start));
   for (;;) {
     if (fs.existsSync(path.join(dir, '.git'))) return dir;
-    if (stopAt && key(dir) === key(stopAt)) return null;
+    if (stopAt && pathKey(dir) === pathKey(stopAt)) return null;
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;

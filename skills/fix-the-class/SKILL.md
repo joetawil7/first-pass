@@ -41,8 +41,8 @@ by class:
   conditional `WHERE`), counts compared to limits before inserting.
 - **Halfway**: `status = 'done'` / `sent = true` / `claimed` written before the call it
   describes.
-- **Outside call**: `fetch(`, HTTP client calls and SDK constructors without a timeout
-  option; retry wrappers around calls that commit.
+- **Outside call**: `fetch` calls, HTTP client calls and SDK constructors without a
+  timeout option; retry wrappers around calls that commit.
 - **Failure is not empty**: `catch` blocks that return `[]`, `null` or a default; UI
   queries that read `isLoading` and not `isError`.
 - **Neighbors**: every writer of the field or status involved; every path that does the
