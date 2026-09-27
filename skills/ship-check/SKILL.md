@@ -22,6 +22,11 @@ repo's test limits say side-by-side runs are safe (at most three at once), other
 after another; then CI's full checks once, in one clean checkout holding every item. The
 report answers each item.
 
+Nothing is pushed, merged, deployed, migrated or published until steps 3 and 4 are finished
+for a clean checkout holding exactly what it ships (failures the base has too are named,
+and findings left open are answered by the user first), unless the user says to ship it as
+it is.
+
 ## 0. Size
 
 A change with no logic in it (a comment, a doc, a spelling fix that changes no behaviour)
@@ -77,25 +82,28 @@ never review in the context that wrote the code.
 For each finding:
 
 - Real (CONFIRMED, or PLAUSIBLE and you confirm it), and its scenario breaks the task or a
-  promise in the repo's rules, invariants or docs, or does real harm (wrong money, lost or
-  leaked data, a security hole, a crash): fix it, with its own failing-first test (step 2).
+  promise in the repo's rules, invariants or docs, or does real harm (money lost, wrongly
+  charged or spent without a cap, lost or leaked data, a side effect done twice, a security
+  hole, a legal breach, a crash): fix it,
+  with its own failing-first test (step 2).
 - Real, but its worst case stays inside what the repo promises: list it under Open with
   why; don't build for it.
 - Disagree: say why in the report, with file:line.
-- Real but out of scope: list it under Open.
+- Real but out of scope (the change neither caused it nor made it worse): list it under
+  Open.
 
 If the fixes were more than small, run the breaker again on the fixes: round 2, and round 3
 on round 2's fixes if they were more than small too. A fix that touches code another item
 in the same prompt uses always gets round 2, on the combined diff. Rounds are counted per
 item; say the count in the reply after each round ("review round 2 of 3 for item 1"), so
-it survives a compacted context. After round 3, stop: a finding the reviewer rates high
-(money, lost or leaked data, a side effect done twice, security, legal) or that crashes is
-still fixed, and so is a CI failure the change caused (step 4); each such fix gets a review
-of that fix, repeated until one finds nothing new that is high in it. Disputed and
-out-of-scope findings stay listed, not fixed again. Every other finding goes under Open with
-its worst case, for the user to decide, and an item left with an open finding that breaks
-the task or a promise in the repo's rules, invariants or docs is reported as built, not
-done. More rounds for findings that are not high only when the user asks.
+it survives a compacted context. After round 3, stop: only a finding that does real harm
+(see above), whatever severity it was given, is still fixed, and so is a CI failure the
+change caused (step 4); each such fix gets a review of that fix, repeated until one finds no
+new real harm in it. Disputed and out-of-scope findings stay listed, not fixed again. Every
+other finding goes under Open with its worst case, for the user to decide, and an item left
+with an open finding in its scope that breaks the task or a promise in the repo's rules,
+invariants or docs is reported as built, not done. More rounds for other findings only when
+the user asks.
 
 ## 4. CI's own checks, in the clean checkout
 
@@ -106,8 +114,8 @@ deletion or auth). Follow the project's rules for heavy runs.
 
 A failure that also happens on the base without the change is pre-existing: name the test
 and move on. A failure the change caused gets a fix; a fix that is more than small goes
-back to step 3 (it counts as a round; after round 3 it is reviewed like a high fix), and
-the full checks run again. Then remove the worktree (`git -C <repo> worktree remove --force <path>`) and any leftovers,
+back to step 3 (it counts as a round; after round 3 it is reviewed like a fix for real
+harm), and the full checks run again. Then remove the worktree (`git -C <repo> worktree remove --force <path>`) and any leftovers,
 including copied env files.
 
 ## 5. Monitoring
