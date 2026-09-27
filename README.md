@@ -14,6 +14,11 @@ only). You set it up once, in the folder that holds your repos.
   what happens if it runs twice, stops halfway, or an outside service times out; which
   other code uses the same data; what the user sees when it fails. Each answer is a
   `file:line`, a test, or a gap you decide to accept.
+- **While building,** anything the task didn't ask for (a helper, a cap, a retry, an option)
+  has to earn its place. The agent asks whether it needs to exist, leaves it out when
+  nothing requires it, and lists it under "Not built" so you can ask for it. A review
+  finding gets fixed in code only when it breaks the task or a written promise, or does real
+  harm; the rest are listed as open, with why.
 - **Before "done",** a second agent that didn't write the code reviews it in a fresh
   context. "Done" needs a test that failed before the change and CI's checks passing in a
   clean checkout; anything less is reported as built, not done.
@@ -22,8 +27,12 @@ only). You set it up once, in the folder that holds your repos.
 - **On a pull request,** `/first-pass:review` checks your own branch before you ask for
   review, or a teammate's PRs across several repos. Every finding comes with its proof or
   is marked unproven, and it never posts to GitHub.
-- **In every session,** hooks send back a "done" that has no evidence behind it, run each
-  repo's own hooks from the shared folder, and say what drifted since setup.
+- **In every session,** hooks send back a "done" that has no evidence behind it (edits made
+  through the shell count too), run each repo's own hooks from the shared folder, and say
+  what drifted since setup.
+- **In replies** (optional, you choose at setup): plain, short answers. The first line says
+  what happened or what you need to do, in everyday words, without the names from inside
+  the work, and the reply ends with only what you have to do or decide.
 
 **What it helps with**
 
@@ -34,6 +43,10 @@ only). You set it up once, in the folder that holds your repos.
 - Many repos opened from one folder, where each repo's own rules and hooks don't load.
 - Prompts like "be 100% sure", which change how sure the answer sounds, not what gets
   checked.
+- Code nobody asked for: the extra cache layer, guard or option that becomes one more thing
+  to maintain, and the next thing to break.
+- Replies too long, or too full of the agent's own names for things, to follow once you've
+  looked away.
 
 ```
 /plugin marketplace add joetawil7/first-pass
@@ -144,7 +157,8 @@ What it reads and keeps:
 
 ## What it writes to your machine
 
-- `AGENTS.md` and `CLAUDE.md` at the root, and a section in each repo's `CLAUDE.md` or
+- `AGENTS.md` and `CLAUDE.md` at the root (the rules and, if you want them, the reply style
+  and your habit words), and a section in each repo's `CLAUDE.md` or
   `AGENTS.md`, all between `first-pass` markers. Outside the markers it adds only import
   lines, and it lists each one it adds.
 - `INVARIANTS.md` in each repo (a draft for you to review), `.first-pass/workspace.json` at
@@ -236,6 +250,37 @@ publishing, scheduling and other skills until the rewrite is on screen (reading 
 never held back): with the
 instruction alone, the rewrite was skipped in 7 of my 11 test runs.
 
+## How the rules were tested
+
+I test a rule the way I'd test code: fresh Claude Code sessions and agents (Opus, high
+effort) that load nothing else, hidden checks they never see, and judges who read the
+output blind.
+
+- **Less code nobody asked for.** 52 runs on two tasks (add caching to a product page, add
+  coupons to a checkout). The runs compared first-pass alone, first-pass with
+  [ponytail](https://github.com/DietrichGebert/ponytail), and versions of the "does it need
+  to exist?" rule.
+  - Every hidden correctness check passed in every run, except one about declined cards.
+    That check failed in 15 of the 32 coupon runs, across every setup, and it tested my
+    fake payment gateway more than the code.
+  - On caching, a blind judge counted about 10 lines per run that nobody asked for with
+    first-pass alone, and 3 with the rules that ship.
+  - On coupons, the code added after the reviewer's findings went from 6 lines per run to 3.
+  - The tests the agent wrote caught 18 of 18 planted bugs with the shipped rules. With
+    ponytail installed, 2 of 30 got past them.
+  - One rule I expected to help, "a promise in the docs counts as a real need", made the
+    code about 40% bigger, so it's not in.
+- **Plain replies.** 10 real replies were rewritten under the old and the new reply rules.
+  Two fresh judges, reading like a smart 15-year-old, picked the new version 16 times out
+  of 20, rated it clearer (3.3 vs 3.0 out of 5) and got lost on fewer phrases (150 vs 175).
+  The catch: 7 times it held back something that mattered, so the rule now says never to
+  hold back a risk, a failure or a decision that's yours.
+- **The reviewer still reports everything.** In 3 runs on a small change with 8 planted
+  bugs, all 8 were in every review and in every final reply.
+
+These are small samples on small tasks. They show the rules do what they say, not how much
+they help on your code.
+
 ## What it won't do
 
 - **It's slower per change.** A test that fails first, a second agent's review and CI in a
@@ -265,6 +310,10 @@ instruction alone, the rewrite was skipped in 7 of my 11 test runs.
 - [superpowers](https://github.com/obra/superpowers): a full development method for coding
   agents, as skills.
 - [anthropics/skills](https://github.com/anthropics/skills): Anthropic's examples of skills.
+- [ponytail](https://github.com/DietrichGebert/ponytail): makes coding agents write less
+  code. first-pass's "does it need to exist?" rule came from testing against it.
+- [i-have-adhd](https://github.com/ayghri/i-have-adhd): replies shaped so you can act on
+  them. first-pass's reply rules borrow its check of the first and last lines.
 - Huang et al., [Large Language Models Cannot Self-Correct Reasoning Yet](https://arxiv.org/abs/2310.01798) (ICLR 2024)
 - Tambon et al., [Bugs in Large Language Models Generated Code](https://arxiv.org/abs/2403.08937)
 - Anthropic, [Best practices for Claude Code](https://code.claude.com/docs/en/best-practices)
