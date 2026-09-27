@@ -287,7 +287,11 @@ they help on your code.
   clean checkout take time and tokens. On a small demo repo, fixing one double-charge bug
   with `fix-the-class` and then running `ship-check` used about $29 at API list prices
   (three reviewer passes). The trade is fewer rounds after "done". The pre-mortem scales
-  with the change: a copy tweak answers it in one line.
+  with the change: a copy tweak answers it in one line. To keep the cost down, a prompt with
+  several items builds them all first, then reviews them and runs CI's full checks once at
+  the end. Review rounds stop after three: after that, only serious findings (money, data,
+  something done twice, security, legal, a crash) are still fixed and checked again, and the
+  rest come to you as a list.
 - **It won't make code bug free.** The aim is fewer and smaller escapes: no high-severity
   ones, no bug class found twice. This is version 0.4, so that's the design, not a measured
   result yet.

@@ -14,6 +14,14 @@ every step below.
 Run everything inside the repo that changed (`cd <repo>`, `git -C <repo>`), not from a main
 folder above it. A change that spans repos walks the steps once per repo.
 
+A prompt with several items walks steps 1 and 2 per item, while each is built, running only
+the tests that item touches; one clean checkout of the base serves every item's fail-first
+run. Steps 3 and 4 run once for all of them, after the last item is built: one review per
+item (small items that touch the same code can share one), started together only where the
+repo's test limits say side-by-side runs are safe (at most three at once), otherwise one
+after another; then CI's full checks once, in one clean checkout holding every item. The
+report answers each item.
+
 ## 0. Size
 
 A change with no logic in it (a comment, a doc, a spelling fix that changes no behaviour)
@@ -76,7 +84,18 @@ For each finding:
 - Disagree: say why in the report, with file:line.
 - Real but out of scope: list it under Open.
 
-If the fixes were more than small, run the breaker again on the new diff.
+If the fixes were more than small, run the breaker again on the fixes: round 2, and round 3
+on round 2's fixes if they were more than small too. A fix that touches code another item
+in the same prompt uses always gets round 2, on the combined diff. Rounds are counted per
+item; say the count in the reply after each round ("review round 2 of 3 for item 1"), so
+it survives a compacted context. After round 3, stop: a finding the reviewer rates high
+(money, lost or leaked data, a side effect done twice, security, legal) or that crashes is
+still fixed, and so is a CI failure the change caused (step 4); each such fix gets a review
+of that fix, repeated until one finds nothing new that is high in it. Disputed and
+out-of-scope findings stay listed, not fixed again. Every other finding goes under Open with
+its worst case, for the user to decide, and an item left with an open finding that breaks
+the task or a promise in the repo's rules, invariants or docs is reported as built, not
+done. More rounds for findings that are not high only when the user asks.
 
 ## 4. CI's own checks, in the clean checkout
 
@@ -86,7 +105,9 @@ touches; the whole integration suite when the change touches jobs, payments, pub
 deletion or auth). Follow the project's rules for heavy runs.
 
 A failure that also happens on the base without the change is pre-existing: name the test
-and move on. Then remove the worktree (`git -C <repo> worktree remove --force <path>`) and any leftovers,
+and move on. A failure the change caused gets a fix; a fix that is more than small goes
+back to step 3 (it counts as a round; after round 3 it is reviewed like a high fix), and
+the full checks run again. Then remove the worktree (`git -C <repo> worktree remove --force <path>`) and any leftovers,
 including copied env files.
 
 ## 5. Monitoring

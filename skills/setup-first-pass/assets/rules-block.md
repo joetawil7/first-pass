@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.4.2 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.4.3 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -79,9 +79,26 @@ skill has the full procedure.
   listed as open. A finding is fixed in code when its scenario breaks the task or a promise in
   the repo's rules, invariants or docs, or does real harm (wrong money, lost or leaked data, a
   security hole, a crash); one whose worst case stays inside what the repo promises is listed
-  as open with why, not built for; (3) CI's own checks passing in a clean checkout holding
-  only this change on top of its base. Short of that, it is reported as built, not done.
-  The `ship-check` skill walks this.
+  as open with why, not built for. Reviews run at most three rounds per item (the first and
+  two on its fixes). After round 3, a finding the reviewer rates high (money, lost or leaked
+  data, a side effect done twice, security, legal) or that crashes is still fixed, and so is
+  a CI failure the change caused; each such fix gets a review of that fix, repeated until one
+  finds nothing new that is high in it, while disputed and out-of-scope findings stay
+  listed. The rest go to the user as open, and an item left with an open finding that breaks
+  the task or a promise in the repo's rules, invariants or docs is built, not done; (3) CI's own
+  checks passing in a clean checkout holding only this change (or this prompt's items) on
+  top of its base. Short of that, it is reported as built, not done. The `ship-check` skill
+  walks this.
+- **Several items in one prompt.** Build each item with its own tests, failing first and
+  then passing (one clean checkout of the base serves them all), and run only the tests that
+  item touches. Then one fresh review per item (small items that touch the same code can
+  share one), its findings handled as above: started together only where the repo's test
+  limits say side-by-side runs are safe (at most three at once), otherwise one after
+  another. A fix that touches code another item uses gets a
+  second-round review of the combined diff. Then CI's full checks once, in one clean
+  checkout holding every item; if they fail, a fix that is more than small is reviewed (it
+  counts as a round), and the full checks run again. A full suite runs mid-work only when
+  the next item depends on its result.
 - **Scale it to the change.** A change with no logic in it (a comment, a doc, a spelling
   fix that changes no behaviour) needs only the repo's format, lint and build checks, plus
   the words check when people read the text. A change that alters behaviour gets all of it,

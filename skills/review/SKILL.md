@@ -225,7 +225,8 @@ step 8.
 
 - **The breaker.** Hand each change to the `breaker` agent (Claude Code: `first-pass:breaker`,
   or `breaker` where a repo installed its own; Cursor: `/breaker`) in its own context, in
-  parallel when there are several. Give it: what the change is for (title, description,
+  parallel when there are several, at most three at once and within the repo's test limits
+  (one after another where they forbid runs side by side). Give it: what the change is for (title, description,
   ticket), the repo and its temp clone's path, the base and head shas, the description's
   claims as the author's pre-mortem to check, the other PRs of the same change, what is live
   today, the related repos' temp clone paths to read neighbors in, and whether it may run

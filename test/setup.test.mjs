@@ -160,3 +160,15 @@ test('a workspace file folder given as a uri is skipped with a note, not a crash
   const survey = surveyWorkspace(root);
   assert.match(survey.codeWorkspaceFolders.find((f) => f.problem).problem, /without a "path"/);
 });
+
+test('after round 3, the rules and ship-check still fix every kind of finding the breaker rates high', () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\s+/g, ' ');
+  const high = /\*\*Severity\*\*: high \(([^)]+)\)/.exec(read('skills/setup-first-pass/assets/breaker.md'))[1].split(/,\s*/);
+  assert.ok(high.length >= 4, 'the breaker lists what it rates high');
+  for (const file of ['skills/setup-first-pass/assets/rules-block.md', 'skills/ship-check/SKILL.md']) {
+    const after = /After round 3,([^.]*)/.exec(read(file));
+    assert.ok(after, `${file} says what happens after round 3`);
+    for (const kind of high) assert.ok(after[1].includes(kind.replace('data loss', 'data')), `${file}: "${kind}" is still fixed after round 3`);
+  }
+});
