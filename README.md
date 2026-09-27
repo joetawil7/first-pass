@@ -91,7 +91,7 @@ first-pass names those checks, and asks for proof before anything is called done
 | --- | --- | --- |
 | `premortem` | The ten questions, answered against the code | Before code |
 | `breaker` (agent) | Fresh-context review of the diff and of every other path touching the same data; concrete findings only | Before done |
-| `ship-check` | The definition of done, ending in a report where every "Verified" line has its command and result | Before done |
+| `ship-check` | The definition of done, ending in a report where every "Verified" line says what was run and its result | Before done |
 | `fix-the-class` | Reproduce, name the class, search for it everywhere, run the ten questions on the fix, fix or record each hit, make it hard to repeat | On any bug |
 | `setup-first-pass` | Writes the rules once, a map of your repos, and a section per repo with its real commands, test limits and a drafted `INVARIANTS.md` | Once, then to update |
 | `habit-words` | Reads what you typed in your recent sessions and maps words like "be 100% sure" to the checks they should mean | At setup, then when due |
@@ -208,7 +208,7 @@ Cursor.
    "Not handled, because" lines: those are your calls.
 2. **Build**, with the tests the pre-mortem named, each one failing on the old code first.
 3. **Done.** `ship-check` runs the breaker and CI's checks in a clean checkout, then reports
-   `Verified: <command> → <result>` and what wasn't verified.
+   `Verified: <what was run> → <result>` and what wasn't verified.
 4. **Bug.** `fix-the-class` fixes the one you found, the others like it, and adds the check
    that stops the next one.
 5. **Review.** On your own branch, `/first-pass:review` with nothing after it reviews your

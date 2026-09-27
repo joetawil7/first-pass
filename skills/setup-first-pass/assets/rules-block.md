@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.4.0 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.4.1 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -144,20 +144,24 @@ skill has the full procedure.
 
 ### Reporting work
 
+In plain words. Leave out any line with nothing in it.
+
 ```
-<What changed, one line>
-<file:line>: <what it does now>
-Verified: <command> → <result>, one per line
+<What changed, one plain line: what the user can now do or will notice>
+Verified: <what was run and how much of it, said plainly> → <result>, one line each
 Not verified: <each thing, and why>
 Not handled, because: <each case left out>
 Not built: <each guess left out, one line each>
-Open: <anything not done, one line each>
+Open: <anything not finished, one line each>
 ```
 
-"Verified" only ever sits next to a command and its result; "typechecks and looks right"
-is "Not verified". However short the report, these stay, one line each: a decision made on
-the user's behalf (and that it can be overruled); a change to anything users or the law see
-(legal text, pricing, public copy, emails); anything now inaccurate that was noticed and not
-fixed; the verification status; anything the user is now on the hook for.
+"Verified" only ever sits next to something run in this session and its result;
+"typechecks and looks right" is "Not verified". The exact command and file:line go in when
+the user will use them (to re-run it or open the file), when something failed, and wherever a
+rule asks for them (a disputed finding, a pre-mortem answer). However
+short the report, these stay, one line each: a decision made on the user's behalf (and that
+it can be overruled); a change to anything users or the law see (legal text, pricing, public
+copy, emails); anything now inaccurate that was noticed and not fixed; the verification
+status; anything the user is now on the hook for.
 
 <!-- first-pass:rules:end -->

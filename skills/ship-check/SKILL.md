@@ -108,17 +108,21 @@ breaks). If the change fixes a known break, move its id out.
 
 ## 8. Report
 
+In plain words. Leave out any line with nothing in it, except Public copy changed and Fresh
+review.
+
 ```
-<What changed, one line>
-<file:line>: <what it does now>
-Verified: <command> → <result>, one per line (fail-before and pass-after counts)
-Breaker: <n findings: fixed / disputed / open>
+<What changed, one plain line: what the user can now do or will notice>
+Verified: <what was run and how much of it, said plainly> → <result>, one line each (the test that failed before and passes now, with pass and fail counts; CI's checks)
+Fresh review: <what the second reviewer found: n fixed, n disputed, n open>
 Not verified: <each thing, and why>
 Not handled, because: <each, from the pre-mortem>
 Not built: <each guess left out, one line each>
 Public copy changed: <file, or "none">
-Open: <follow-ups>
+Open: <follow-ups, one line each>
 ```
 
-"Verified" only ever sits next to a command and its result. If any step above was skipped,
-the change is not done: say "not done" and why, not "done with caveats".
+"Verified" only ever sits next to something run in this session and its result. The exact
+command and file:line go in when the user will use them, when something failed, for each
+disputed finding (step 3), and wherever a rule or skill asks for them. If any step above was
+skipped, the change is not done: say "not done" and why, not "done with caveats".

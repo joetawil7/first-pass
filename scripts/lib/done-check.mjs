@@ -1,5 +1,5 @@
 // The done check: a turn that changed code and ends by calling the work done, fixed or
-// verified, with no `Verified: <command> → <result>` line, is sent back once. The rules
+// verified, with no `Verified: <what was run> → <result>` line, is sent back once. The rules
 // say the same thing; this makes it a check instead of a hope.
 const DOC_FILE = /\.(md|mdx|markdown|txt|rst|adoc)$/i;
 // Words that claim the work is finished. "Works", "working" and "ready" also describe how
@@ -37,7 +37,7 @@ export function doneCheck(input, edits) {
         hookEventName: 'Stop',
         additionalContext:
           `first-pass done check: this turn changed ${files.length} code file(s) (${shown}) and the reply calls the work "${word}" ` +
-          'with no `Verified: <command> → <result>` line. Under the working rules a change counts as done only with that evidence ' +
+          'with no `Verified: <what was run> → <result>` line. Under the working rules a change counts as done only with that evidence ' +
           '(the ship-check skill walks it); without it, the reply says what was built and lists what is not verified.',
       },
     },
