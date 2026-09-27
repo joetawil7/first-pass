@@ -21,9 +21,11 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   report.
 - **CI's checks** (`.github/workflows/validate.yml`, job `validate`): `claude plugin validate
   --strict .` and on `.claude-plugin/plugin.json` (Claude Code pinned to 2.1.280), skill names
-  match folders, every block has one start and one end marker, the rules, profile and words
-  block versions equal `plugin.json`'s, the hooks point at scripts that exist,
-  `node --test test/*.test.mjs`, and the private-name check.
+  match folders, the skills the rules name (`premortem`, `ship-check`, `fix-the-class`,
+  `setup-first-pass`, `habit-words`, `sharpen`, `review`) and the breaker asset exist, every
+  block has one start and one end marker, the rules, profile and words block versions equal
+  `plugin.json`'s, the hooks point at scripts that exist, `node --test test/*.test.mjs`, and
+  the private-name check.
 - **Run one test file:** `node --test test/lib.test.mjs` (also `hooks.test.mjs`,
   `setup.test.mjs`, `words.test.mjs`, `sharpen.test.mjs`).
 - **Real tests** (the layer that catches what mocks miss): `test/hooks.test.mjs` runs
