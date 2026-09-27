@@ -2,11 +2,15 @@
 // first-pass hooks. Claude Code runs this once per event (see hooks/hooks.json) with the
 // event's JSON on stdin; it prints at most one JSON reply.
 //   SessionStart      the drift check, plus approved session hooks
-//   UserPromptSubmit  arms or ends sharpen's gate, then approved session hooks
-//   PreToolUse        sharpen's gate, then approved hooks for the tool's repo
-//   PostToolUse       notes which file changed, then approved hooks for its repo
-//   Stop              approved hooks for each repo edited since their last run, the
-//                     done check and sharpen's check
+//   UserPromptSubmit  arms or ends sharpen's gate, ends shell runs left open, then approved
+//                     session hooks
+//   PreToolUse        sharpen's gate, the start of a shell run and its repos' git status,
+//                     then approved hooks for the tool's repo
+//   PostToolUse       notes which file an edit tool changed or a shell run's end, then
+//                     approved hooks for its repo
+//   PostToolUseFailure  a failed shell run's end
+//   Stop              notes the files shell runs changed, then approved hooks for each
+//                     repo edited since their last run, the done check and sharpen's check
 // With no `.first-pass/workspace.json` above the session there are no approved hooks:
 // the done check and the drift check still run.
 import fs from 'node:fs';
@@ -18,6 +22,7 @@ import { drift } from './lib/drift.mjs';
 import { merge } from './lib/merge.mjs';
 import { gitRoot, pathKey, relative } from './lib/paths.mjs';
 import { armSharpen, sharpenGate, sharpenStop, sharpenStopView } from './lib/sharpen-gate.mjs';
+import { noteShellEnd, noteShellPrompt, noteShellStart, recordShellEdits } from './lib/shell-edits.mjs';
 import { appendEdit, firstTime, readEdits, readOffset, removeOldSessions, writeOffset } from './lib/state.mjs';
 import { findWorkspace, repoOf } from './lib/workspace.mjs';
 
@@ -84,6 +89,18 @@ function sharpenStep(step, input) {
   }
 }
 
+// Watching shell edits must never cost a repo's guard its deny, so a failure is shown (once
+// per session, as is any notice with `once`) and the rest runs.
+function shellStep(results, sessionId, step) {
+  try {
+    for (const notice of step()) if (!notice.once || firstTime(sessionId, notice.once)) results.push(notice);
+  } catch (error) {
+    if (firstTime(sessionId, 'shell-step-failed')) {
+      results.push({ name: 'first-pass shell edits', own: true, json: { systemMessage: `first-pass: watching for shell edits failed (${error.message}); files shell commands change may not be seen by the done check or end-of-turn hooks this session.` } });
+    }
+  }
+}
+
 async function main() {
   const event = process.argv[2];
   const raw = JSON.parse(fs.readFileSync(0, 'utf8'));
@@ -101,6 +118,10 @@ async function main() {
   const ws = findWorkspace(projectDir);
   // A session started inside a listed repo gets that repo's own hooks from Claude Code.
   const startRepo = ws ? repoOf(ws, projectDir) : null;
+  if (event === 'UserPromptSubmit') shellStep(results, input.session_id, () => noteShellPrompt(input));
+  if (event === 'PreToolUse') shellStep(results, input.session_id, () => noteShellStart(input, ws));
+  if (event === 'PostToolUse' || event === 'PostToolUseFailure') shellStep(results, input.session_id, () => noteShellEnd(input));
+  if (event === 'Stop') shellStep(results, input.session_id, () => recordShellEdits(input, ws, (edit) => appendEdit(input.session_id, edit)));
   const edits = event === 'Stop' ? readEdits(input.session_id) : [];
 
   if (event === 'SessionStart') {
@@ -134,6 +155,8 @@ async function main() {
   }
 
   const reply = merge(event, results);
+  // A denied command never runs, so its run ends here.
+  if (event === 'PreToolUse' && reply?.hookSpecificOutput?.permissionDecision === 'deny') shellStep([], input.session_id, () => noteShellEnd(input));
   if (reply) process.stdout.write(JSON.stringify(reply));
 }
 

@@ -2,6 +2,7 @@
 // case-insensitively and may arrive with either slash, so every comparison goes
 // through pathKey().
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 export function pathKey(p) {
@@ -45,4 +46,15 @@ export function posix(p) {
 
 export function relative(from, to) {
   return posix(path.relative(from, to)) || '.';
+}
+
+// A path as a shell command wrote it. Claude Code's Bash tool on Windows is Git Bash, which
+// writes C:\x as /c/x and mounts the temp folder at /tmp (PowerShell reads /c/x as \c\x on
+// the current drive); both shells read ~ as the home folder.
+export function resolveShellPath(cwd, p, tool) {
+  if (p === '~' || /^~[\\/]/.test(p)) return path.join(os.homedir(), p.slice(2));
+  const gitBash = process.platform === 'win32' && tool === 'Bash';
+  if (gitBash && /^\/tmp(\/|$)/.test(p)) return path.join(os.tmpdir(), p.slice(5));
+  const drive = gitBash && /^\/([a-zA-Z])(\/|$)/.exec(p);
+  return drive ? path.resolve(`${drive[1].toUpperCase()}:/`, p.slice(3)) : path.resolve(cwd, p);
 }

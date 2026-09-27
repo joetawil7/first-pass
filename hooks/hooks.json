@@ -37,6 +37,14 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          { "type": "command", "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/hooks.mjs", "PostToolUseFailure"], "timeout": 60 }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

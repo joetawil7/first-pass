@@ -70,6 +70,57 @@ export function writeRecord(sessionId, name, value) {
   }
 }
 
+export function hasRecord(sessionId, name) {
+  return fs.existsSync(path.join(sessionDir(sessionId), `${name}.json`));
+}
+
+// A named log of one JSON line per entry, appended like the edits.
+export function appendLine(sessionId, name, record) {
+  const dir = sessionDir(sessionId);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.appendFileSync(path.join(dir, `${name}.jsonl`), JSON.stringify(record) + '\n');
+}
+
+export function readLines(sessionId, name) {
+  const file = path.join(sessionDir(sessionId), `${name}.jsonl`);
+  if (!fs.existsSync(file)) return [];
+  const out = [];
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line) continue;
+    try {
+      out.push(JSON.parse(line));
+    } catch (error) {
+      // A hook killed mid-append cuts its line short, and the next append joins it: that
+      // line's entries are lost, the rest are kept.
+      if (!(error instanceof SyntaxError)) throw error;
+    }
+  }
+  return out;
+}
+
+// Writes the record only if none by that name exists yet; parallel hooks keep the first.
+export function createRecord(sessionId, name, value) {
+  const dir = sessionDir(sessionId);
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(value), { flag: 'wx' });
+    return true;
+  } catch (error) {
+    if (error.code === 'EEXIST') return false;
+    throw error;
+  }
+}
+
+// The names of the session's records that start with `prefix`.
+export function recordNames(sessionId, prefix) {
+  const dir = sessionDir(sessionId);
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((file) => file.startsWith(prefix) && file.endsWith('.json'))
+    .map((file) => file.slice(0, -'.json'.length));
+}
+
 // True the first time `name` is raised in a session, false after: for notices that should
 // appear once per session, not on every tool call.
 export function firstTime(sessionId, name) {

@@ -244,12 +244,21 @@ instruction alone, the rewrite was skipped in 7 of my 11 test runs.
   (three reviewer passes). The trade is fewer rounds after "done". The pre-mortem scales
   with the change: a copy tweak answers it in one line.
 - **It won't make code bug free.** The aim is fewer and smaller escapes: no high-severity
-  ones, no bug class found twice. This is version 0.3, so that's the design, not a measured
+  ones, no bug class found twice. This is version 0.4, so that's the design, not a measured
   result yet.
 - **Rules alone fade.** The fixes that last are the ones `fix-the-class` pushes toward: a
   shared helper that's the only way to do a thing, a database constraint, a CI check.
-- **The hooks only see edits made with Claude Code's edit tools.** A file changed by a shell
-  command isn't noticed by the done check or the end-of-turn hooks.
+- **Shell edits are seen late, and not all of them.** A file a shell command changes
+  (`sed -i`, a heredoc, a copy, a formatter) is found at the end of the turn, from
+  `git status` and the file's time, so the done check and end-of-turn hooks see it; hooks
+  that run after each edit don't. Not seen: files git ignores; on Windows, a copy
+  (`Copy-Item`, `copy`) over a file git showed no change in, which keeps the source's
+  times; writes from a command still running in the background after it returned; from a
+  main folder, a repo the command neither runs in, `cd`s into nor names a path in; and, in
+  a single repo, any other repo. Counted anyway: a file rewritten with the same content
+  (`git stash`, then `git stash pop`); another program's write or delete while a shell
+  command runs; and after you refuse a command, writes until your next prompt. A delete is
+  dated by its folder, so a later change in the same folder can count or hide it.
 
 ## Related
 

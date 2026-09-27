@@ -51,7 +51,9 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   `skills/setup-first-pass/assets/words-block.md` and the table in `skills/sharpen/SKILL.md`;
   the PreToolUse matchers in `hooks/hooks.json` (a named list and `mcp__.*`) and
   `GATED_TOOLS`/`isGated` in `scripts/lib/sharpen-gate.mjs` (a test enforces it), and
-  `gateOnly` in `scripts/hooks.mjs`, which keeps repo hooks off the tools only the gate needs; the word
+  `gateOnly` in `scripts/hooks.mjs`, which keeps repo hooks off the tools only the gate needs;
+  `SHELL_TOOLS` in `scripts/lib/shell-edits.mjs` and the PreToolUse, PostToolUse and
+  PostToolUseFailure matchers in `hooks/hooks.json` (a test enforces it); the word
   **Sharpened** in `skills/sharpen/SKILL.md` step 5 and `SHOWN` in the gate; the transcript row shapes `typedText` in
   `scripts/lib/words.mjs` knows and what Claude Code writes (a new row kind is silently left
   out or wrongly kept).

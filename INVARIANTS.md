@@ -57,3 +57,10 @@ holds it today and where it is known to break.
    Past 10 gated calls per reply, the `MAX_CALLS` backstop can end the hold a reply early.
    A tool Claude Code adds later is free until it is named in `GATED_TOOLS` and hooks.json.
    Writing the word "Sharpened" releases it: it is a nudge, not a lock.
+10. **The plugin's own scripts make no network call (the README promises it).**
+   Held by: `shellRoots` in `scripts/lib/shell-edits.mjs`, which only looks up paths inside the
+   main folder and never a `//host` or `\\host` one (on Windows, looking one up contacts that
+   host); the `shellRoots` test in `test/lib.test.mjs` fails if one is looked up.
+   Known breaks: a repo, main folder or working folder that itself lives on a network share
+   or a mapped network drive is read over the network by `git status`, as the user's own
+   git does.

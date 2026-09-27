@@ -68,8 +68,11 @@ never review in the context that wrote the code.
 
 For each finding:
 
-- Real (CONFIRMED, or PLAUSIBLE and you confirm it): fix it, with its own failing-first
-  test (step 2).
+- Real (CONFIRMED, or PLAUSIBLE and you confirm it), and its scenario breaks the task or a
+  promise in the repo's rules, invariants or docs, or does real harm (wrong money, lost or
+  leaked data, a security hole, a crash): fix it, with its own failing-first test (step 2).
+- Real, but its worst case stays inside what the repo promises: list it under Open with
+  why; don't build for it.
 - Disagree: say why in the report, with file:line.
 - Real but out of scope: list it under Open.
 
@@ -112,6 +115,7 @@ Verified: <command> → <result>, one per line (fail-before and pass-after count
 Breaker: <n findings: fixed / disputed / open>
 Not verified: <each thing, and why>
 Not handled, because: <each, from the pre-mortem>
+Not built: <each guess left out, one line each>
 Public copy changed: <file, or "none">
 Open: <follow-ups>
 ```

@@ -10,7 +10,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { whyPaused } from './fingerprint.mjs';
-import { gitRoot, pathKey, posix } from './paths.mjs';
+import { gitRoot, pathKey, posix, resolveShellPath } from './paths.mjs';
 import { repoNamed, repoOf } from './workspace.mjs';
 
 // Must equal the timeouts in hooks/hooks.json (a test checks). A bridged hook gets a little
@@ -69,7 +69,7 @@ export function commandTarget(input) {
     new RegExp(`\\bgit\\s+-C\\s+(?:${quoted})`).exec(command) ??
     new RegExp(`^\\s*(?:cd|Set-Location|pushd)\\s+(?:${quoted})\\s*(?:&&|;|\\|\\||$)`, 'i').exec(command);
   if (!match) return null;
-  return path.resolve(input.cwd ?? process.cwd(), match[1] ?? match[2] ?? match[3]);
+  return resolveShellPath(input.cwd ?? process.cwd(), match[1] ?? match[2] ?? match[3], input.tool_name);
 }
 
 // The repos whose own hooks Claude Code runs natively in this session: the one it started

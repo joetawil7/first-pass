@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.3.0 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.4.0 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -76,9 +76,12 @@ skill has the full procedure.
   reproduces it end to end (a real database beats a mock where the bug could live in a
   query); (2) a fresh review: the `breaker` agent on the diff in its own context, never the
   one that wrote the code, with each finding it proves fixed, disputed with file:line, or
-  listed as open; (3) CI's own checks passing in a clean checkout holding only this change
-  on top of its base. Short of that, it is reported as built, not done. The `ship-check`
-  skill walks this.
+  listed as open. A finding is fixed in code when its scenario breaks the task or a promise in
+  the repo's rules, invariants or docs, or does real harm (wrong money, lost or leaked data, a
+  security hole, a crash); one whose worst case stays inside what the repo promises is listed
+  as open with why, not built for; (3) CI's own checks passing in a clean checkout holding
+  only this change on top of its base. Short of that, it is reported as built, not done.
+  The `ship-check` skill walks this.
 - **Scale it to the change.** A change with no logic in it (a comment, a doc, a spelling
   fix that changes no behaviour) needs only the repo's format, lint and build checks, plus
   the words check when people read the text. A change that alters behaviour gets all of it,
@@ -92,8 +95,11 @@ skill has the full procedure.
   and why.
 - **No silencing.** No catch-all `catch`, `as any`, `@ts-ignore`, lint-disable or empty
   fallback (`?? []`) to make something work. If one is truly needed, it goes in the report.
-- **Keep it minimal.** No code for states that cannot happen, no abstraction or config for
-  a single use, no files beyond what the task needs.
+- **Keep it minimal.** Before writing anything the task did not ask for (a helper, a guard,
+  a cap, an option, a retry), ask whether it needs to exist at all. A need that the task, the
+  repo's rules, its invariants or a pre-mortem answer names is real; anything else is a
+  guess: leave it out and list it under "Not built". Then: no code for states that cannot
+  happen, no abstraction or config for a single use, no files beyond what the task needs.
 
 ### Scope, steps and cost
 
@@ -144,6 +150,7 @@ skill has the full procedure.
 Verified: <command> → <result>, one per line
 Not verified: <each thing, and why>
 Not handled, because: <each case left out>
+Not built: <each guess left out, one line each>
 Open: <anything not done, one line each>
 ```
 

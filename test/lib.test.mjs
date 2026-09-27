@@ -10,7 +10,9 @@ import { claimWord, doneCheck } from '../scripts/lib/done-check.mjs';
 import { compareVersions } from '../scripts/lib/drift.mjs';
 import { approval, whyPaused } from '../scripts/lib/fingerprint.mjs';
 import { CONTEXT_CAP, merge } from '../scripts/lib/merge.mjs';
-import { isInside } from '../scripts/lib/paths.mjs';
+import { isInside, resolveShellPath } from '../scripts/lib/paths.mjs';
+import { SHELL_TOOLS, shellRoots } from '../scripts/lib/shell-edits.mjs';
+import { appendLine, createRecord, readLines, readRecord, recordNames } from '../scripts/lib/state.mjs';
 
 function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'first-pass-test-'));
@@ -201,6 +203,10 @@ test('bridged hooks get less time than first-pass itself, on every event', () =>
     assert.ok(effectiveTimeout({ timeout: 600 }, event) < limit);
   }
   assert.equal(effectiveTimeout({ timeout: 10 }, 'PreToolUse'), 10);
+  // The one event first-pass takes for itself only (a failed shell run's end) runs no bridged
+  // hook; it gets PostToolUse's time.
+  assert.deepEqual(Object.keys(hooks).filter((event) => !(event in EVENT_LIMITS)), ['PostToolUseFailure']);
+  for (const group of hooks.PostToolUseFailure) assert.equal(group.hooks[0].timeout, EVENT_LIMITS.PostToolUse);
 });
 
 test('entries that could never run are named', () => {
@@ -314,4 +320,98 @@ test('versions compare numerically', () => {
   assert.equal(compareVersions('0.2.0', '0.10.0'), -1);
   assert.equal(compareVersions('1.0', '1.0.0'), 0);
   assert.equal(compareVersions('0.3.1', '0.3.0'), 1);
+});
+
+test('every shell tool watched for edits reaches the start and both ends of a run in hooks/hooks.json', () => {
+  const hooks = JSON.parse(fs.readFileSync(new URL('../hooks/hooks.json', import.meta.url), 'utf8')).hooks;
+  for (const event of ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']) {
+    for (const tool of SHELL_TOOLS) assert.ok(hooks[event].some((group) => matches(group.matcher, tool)), `${tool} is not sent to ${event}`);
+  }
+});
+
+test('shell paths are read the way the shell writes them: Git Bash drives for Bash only, ~ in both', () => {
+  const cwd = tempDir();
+  assert.equal(resolveShellPath(cwd, '~', 'Bash'), os.homedir());
+  assert.equal(resolveShellPath(cwd, '~/proj', 'PowerShell'), path.join(os.homedir(), 'proj'));
+  assert.equal(resolveShellPath(cwd, 'src/a.ts', 'Bash'), path.join(cwd, 'src', 'a.ts'));
+  if (process.platform === 'win32') {
+    assert.equal(resolveShellPath(cwd, '/c/Users/x', 'Bash'), path.resolve('C:/Users/x'));
+    assert.equal(resolveShellPath(cwd, '/d', 'Bash'), path.resolve('D:/'));
+    assert.equal(resolveShellPath(cwd, '/tmp/review-x', 'Bash'), path.join(os.tmpdir(), 'review-x'));
+    assert.equal(resolveShellPath(cwd, '/tmpfiles', 'Bash'), path.resolve(cwd, '/tmpfiles'));
+    // PowerShell reads /c/x as \c\x on the current drive, not as drive C.
+    assert.equal(resolveShellPath(cwd, '/c/x', 'PowerShell'), path.resolve(cwd, '/c/x'));
+  } else {
+    assert.equal(resolveShellPath(cwd, '/c/x', 'Bash'), '/c/x');
+  }
+});
+
+test('a files hook on shell commands runs for the repo a Git Bash cd or git -C names', { skip: process.platform !== 'win32' }, () => {
+  const root = tempDir();
+  for (const name of ['api', 'web']) fs.mkdirSync(path.join(root, name, '.git'), { recursive: true });
+  const ws = {
+    root,
+    repos: [{ name: 'api', abs: path.join(root, 'api') }, { name: 'web', abs: path.join(root, 'web') }],
+    hooks: [{ id: 'guard', scope: 'files', repos: ['web'], events: { PreToolUse: 'Bash' } }],
+  };
+  const gitBash = (p) => `/${p[0].toLowerCase()}${p.slice(2).replace(/\\/g, '/')}`;
+  const web = path.join(root, 'web');
+  const ran = (command) => selectRuns('PreToolUse', { tool_name: 'Bash', cwd: root, tool_input: { command } }, ws, () => []).map((run) => run.repo.name);
+  assert.deepEqual(ran(`cd ${gitBash(web)} && git commit -m x`), ['web']);
+  assert.deepEqual(ran(`git -C ${gitBash(web)} commit -m x`), ['web']);
+  assert.deepEqual(ran(`cd "${gitBash(web)}/src" && make`), ['web']);
+  assert.deepEqual(ran(`cd ${gitBash(path.join(root, 'api'))} && make`), []);
+});
+
+test('a record created twice keeps the first, and names list by prefix', () => {
+  process.env.CLAUDE_PLUGIN_DATA = tempDir();
+  assert.equal(createRecord('s', 'shell-a-1', { n: 1 }), true);
+  assert.equal(createRecord('s', 'shell-a-1', { n: 2 }), false);
+  assert.deepEqual(readRecord('s', 'shell-a-1'), { n: 1 });
+  createRecord('s', 'shell-b-1', {});
+  assert.deepEqual(recordNames('s', 'shell-a-'), ['shell-a-1']);
+  assert.deepEqual(recordNames('none', 'shell-'), []);
+});
+
+test('a log line cut short by a killed hook is dropped, and the rest are kept', () => {
+  process.env.CLAUDE_PLUGIN_DATA = tempDir();
+  appendLine('s', 'log', { n: 1 });
+  fs.appendFileSync(path.join(process.env.CLAUDE_PLUGIN_DATA, 'sessions', 's', 'log.jsonl'), '{"n":');
+  appendLine('s', 'log', { n: 3 });
+  appendLine('s', 'log', { n: 4 });
+  assert.deepEqual(readLines('s', 'log'), [{ n: 1 }, { n: 4 }]);
+  assert.deepEqual(readLines('s', 'none'), []);
+});
+
+test('a shell command reaches the repos it runs in, names, or cds into, and nothing outside the main folder', () => {
+  const root = tempDir();
+  for (const name of ['api', 'web', 'other']) fs.mkdirSync(path.join(root, name, '.git'), { recursive: true });
+  const outside = `${root}-outside`;
+  fs.mkdirSync(path.join(outside, '.git'), { recursive: true });
+  const ws = { root, repos: [{ name: 'api', abs: path.join(root, 'api') }, { name: 'web', abs: path.join(root, 'web') }] };
+  const roots = (command, cwd = root, space = ws) => shellRoots({ tool_name: 'Bash', cwd, tool_input: { command } }, space).map((r) => path.basename(r)).sort();
+  assert.deepEqual(roots('ls'), []);
+  assert.deepEqual(roots("sed -i 's/a/b/' api/src/x.ts"), ['api']);
+  assert.deepEqual(roots('cd web && npm test'), ['web']);
+  assert.deepEqual(roots(`git -C "${path.join(root, 'web')}" status`), ['web']);
+  assert.deepEqual(roots('cat api/a > other/b.txt'), ['api', 'other']);
+  assert.deepEqual(roots('curl https://example.com/api/x -o /dev/null'), []);
+  assert.deepEqual(roots('cat //host/share/x \\\\host\\share\\y > api/z'), ['api']);
+  assert.deepEqual(roots(`sed -i x ${path.join(outside, 'f.txt')}`), []);
+  assert.deepEqual(roots('npm test', path.join(root, 'api', 'src')), ['api']);
+  // Without a main folder only the repo the command runs in counts.
+  assert.deepEqual(roots(`sed -i x ${path.join(root, 'web', 'f')}`, path.join(root, 'api'), null), ['api']);
+  // On Windows, looking up a \\host path contacts that host (tens of seconds for one that
+  // does not answer); 192.0.2.1 is a documentation address nothing answers on.
+  const started = Date.now();
+  for (const space of [ws, null]) {
+    assert.deepEqual(roots('cd //192.0.2.1/share && make', root, space), []);
+    assert.deepEqual(roots('git -C \\\\192.0.2.1\\share status', root, space), []);
+    assert.deepEqual(roots('make', '\\\\192.0.2.1\\share', space), []);
+  }
+  assert.ok(Date.now() - started < 1000, `took ${Date.now() - started} ms`);
+  if (process.platform === 'win32') {
+    const gitBash = `/${root[0].toLowerCase()}${root.slice(2).replace(/\\/g, '/')}/web/src/App.tsx`;
+    assert.deepEqual(roots(`sed -i x ${gitBash}`), ['web']);
+  }
 });
