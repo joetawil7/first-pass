@@ -327,7 +327,7 @@ report's last lines:
 
 ```
 Reviewed: <changes>, at <head shas>
-Breaker: <n findings: confirmed / disputed / unproven>
+Fresh review: <n findings: confirmed / disputed / unproven>
 Comments read: <n of total, per PR>
 GitHub: read only
 Cleanup: <review root removed; your checkouts as they were, or what differs>
