@@ -161,21 +161,44 @@ test('a workspace file folder given as a uri is skipped with a note, not a crash
   assert.match(survey.codeWorkspaceFolders.find((f) => f.problem).problem, /without a "path"/);
 });
 
-test('after round 3, only real harm is still fixed, and real harm covers every kind the breaker rates high', () => {
+test('only real harm is fixed during the work, the rest goes on one list, and every place names the same harms', async () => {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
   const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\s+/g, ' ');
-  const high = /\*\*Severity\*\*: high \(([^)]+)\)/.exec(read('skills/setup-first-pass/assets/breaker.md'))[1].split(/,\s*/);
+  const breaker = read('skills/setup-first-pass/assets/breaker.md');
+  const high = /\*\*Severity\*\*: high \(([^)]+)\)/.exec(breaker)[1].split(/,\s*/);
   assert.ok(high.length >= 4, 'the breaker lists what it rates high');
-  const word = { 'data loss': 'data', security: 'security', legal: 'legal' };
+  const worst = /\*\*Worst case\*\*(.*?)- \*\*Who meets it/.exec(breaker)[1];
+  const { FIX_NOW, WHO } = await import('../scripts/lib/jev.mjs');
+  // The breaker's worst-case words are the judge's options, so a label never falls between them.
+  for (const kind of [...Object.keys(FIX_NOW), 'small']) assert.match(worst, new RegExp(`\\b${kind}\\b`), `the breaker offers "${kind}"`);
+  const who = /\*\*Who meets it\*\*(.*?)- \*\*Scenario/.exec(breaker)[1];
+  for (const kind of Object.keys(WHO)) assert.match(who, new RegExp(`\\b${kind}\\b`), `the breaker offers who "${kind}"`);
+  const word = { 'data loss': 'data', security: 'security', legal: 'legal', twice: 'twice' };
+  const described = { money: /money lost/, data: /lost or leaked data/, twice: /done twice, sent wrong or sent without the yes/, security: /security hole/, legal: /legal breach/, crash: /a crash/, stuck: /work left stuck/, task: /doing what it was for/ };
   for (const file of ['skills/setup-first-pass/assets/rules-block.md', 'skills/ship-check/SKILL.md']) {
     const text = read(file);
-    const harm = /does real harm \(([^)]+)\)/.exec(text);
+    const harm = /real harm \(([^)]+)\)/.exec(text);
     assert.ok(harm, `${file} says what real harm is`);
     for (const kind of high) assert.ok(harm[1].includes(word[kind] ?? kind), `${file}: real harm covers "${kind}"`);
-    // Past the cap, the fix and its end condition follow the harm, never the reviewer's label.
-    const after = /After round 3,(.*?)(\(3\) CI|## 4\.)/.exec(text);
-    assert.ok(after, `${file} says what happens after round 3`);
-    assert.match(after[1], /real harm/, `${file}: after round 3, real harm is still fixed`);
-    assert.doesNotMatch(after[1], /\bhigh\b/, `${file}: after round 3, nothing turns on the word "high"`);
+    for (const [kind, re] of Object.entries(described)) assert.match(text, re, `${file}: fixes "${kind}" right away`);
+    // What is fixed follows the harm, never the reviewer's label, and the round cap is gone.
+    assert.doesNotMatch(text, /round 3|three rounds/, `${file}: no review-round cap is left`);
+    assert.match(text, /on one list|put it on the item's list/, `${file}: smaller findings go on one list`);
+    assert.match(text, /once, at the end/, `${file}: the list reaches the user once`);
+    assert.match(text, /one review together/, `${file}: the picked fixes share one review`);
+    assert.match(text, /never clear/, `${file}: the judge can never clear harm`);
   }
+  // The words step and the bug-fix skill must not pull small findings back into the work.
+  const words = /## 6\. Words(.*?)## 7\./.exec(read('skills/ship-check/SKILL.md'))[1];
+  assert.match(words, /untrue only in some state.*goes on the item's list/, 'ship-check step 6 lists a sentence untrue only in some state');
+  const fixClass = /^---(.*?)---/.exec(read('skills/fix-the-class/SKILL.md'))[1];
+  assert.match(fixClass, /review finding that does real harm/, 'fix-the-class is for review findings that do real harm');
+  // Every judge command names its repo (the key is chosen by it), and a harm found by Jev or the
+  // agent is carried into the later questions, so it is never advised away or lightly proven.
+  const shipCheck = read('skills/ship-check/SKILL.md');
+  const asks = shipCheck.match(/jev ask \w+[^`]*/g);
+  assert.ok(asks.length >= 3, 'ship-check shows the harm, priority and proof commands');
+  for (const ask of asks) assert.match(ask, /<file> <repo>$/, `"${ask}" names the file and the repo`);
+  assert.match(shipCheck, /carries that harm as its `worst_case`/, 'ship-check carries a found harm into priority and proof');
+  assert.match(read('skills/setup-first-pass/assets/rules-block.md'), /real harm it caused or made worse still open is built, not done/, 'only harm the change caused keeps it from done');
 });

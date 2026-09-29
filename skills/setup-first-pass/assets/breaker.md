@@ -81,6 +81,15 @@ An empty list is a valid answer, and better than a padded one.
 For each finding, most severe first:
 
 - **Severity**: high (money, data loss, a side effect done twice, security, legal) / medium / low
+- **Worst case**, the one word that fits what the scenario itself does: money (lost, charged
+  wrongly, or spent with no cap), data (lost, overwritten or leaked), twice (a side effect
+  done twice, sent wrong, or sent without the yes it needs), security, legal, crash, stuck
+  (a job that never finishes, or a person who can't finish what they started), task (the
+  change doesn't do what it was for), or small (none of those: words wrong in some state, a
+  clumsier path)
+- **Who meets it**: everyone (in normal use), feature (people using one feature or setting),
+  unusual (only after an unusual order of steps, a race, or an error at the wrong moment),
+  or nobody (the path is off or not live today)
 - **Scenario**: the inputs or state, then the wrong result
 - **Where**: file:line, plus the neighbor's file:line when the bug is a mismatch
 - **Proof**: CONFIRMED (you ran it, or traced every step in the code) or PLAUSIBLE

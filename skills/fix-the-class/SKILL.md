@@ -1,6 +1,6 @@
 ---
 name: fix-the-class
-description: Bug-fix routine that fixes the whole class of bug, not just the reported instance. Use for any bug report, failing production behaviour, monitoring alert, audit finding or review finding, and whenever the same kind of bug has been seen before. Reproduces it with a failing test, names the failure class, searches the codebase for the same pattern, fixes or records every hit, and adds the rule, invariant, helper or check that stops it coming back.
+description: Bug-fix routine that fixes the whole class of bug, not just the reported instance. Use for any bug report, failing production behaviour, monitoring alert, audit finding or review finding that does real harm (a smaller review finding goes on the item's list, as ship-check says), and whenever the same kind of bug has been seen before. Reproduces it with a failing test, names the failure class, searches the codebase for the same pattern, fixes or records every hit, and adds the rule, invariant, helper or check that stops it coming back.
 ---
 
 # fix-the-class

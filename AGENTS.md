@@ -18,19 +18,23 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   also typed by hand, reviews the user's own branch (nothing typed) or someone else's PRs
   through the breaker, never posts to GitHub or the ticket, runs a fork's or an outside
   author's code only on a yes, and fixes and pushes only what the user picks after the
-  report.
+  report. The `jev` skill, typed by hand, sets up the optional Jev judge (`scripts/lib/jev.mjs`,
+  `cli.mjs jev`), the plugin's only network call: `ship-check` asks TypeSafe's model about
+  review findings, and code, not the model, holds the policy (it can add harm, never clear
+  it; a failed or unsure answer leaves the call to the rules).
 - **CI's checks** (`.github/workflows/validate.yml`, job `validate`): `claude plugin validate
   --strict .` and on `.claude-plugin/plugin.json` (Claude Code pinned to 2.1.280), skill names
   match folders, the skills the rules name (`premortem`, `ship-check`, `fix-the-class`,
-  `setup-first-pass`, `habit-words`, `sharpen`, `review`) and the breaker asset exist, every
+  `setup-first-pass`, `habit-words`, `sharpen`, `review`, `jev`) and the breaker asset exist, every
   block has one start and one end marker, the rules, profile and words block versions equal
   `plugin.json`'s, the hooks point at scripts that exist, `node --test test/*.test.mjs`, and
   the private-name check.
 - **Run one test file:** `node --test test/lib.test.mjs` (also `hooks.test.mjs`,
-  `setup.test.mjs`, `words.test.mjs`, `sharpen.test.mjs`).
+  `setup.test.mjs`, `words.test.mjs`, `sharpen.test.mjs`, `jev.test.mjs`).
 - **Real tests** (the layer that catches what mocks miss): `test/hooks.test.mjs` runs
   `scripts/hooks.mjs` the way Claude Code does, against throwaway main folders in the system
-  temp folder. Before a release, an end-to-end run: `claude -p "/first-pass:setup-first-pass"`
+  temp folder; `test/jev.test.mjs` runs the judge and `cli.mjs jev` against a fake Jev
+  server on 127.0.0.1 (never the real one). Before a release, an end-to-end run: `claude -p "/first-pass:setup-first-pass"`
   with `--plugin-dir .` on a fake main folder, then fresh sessions that check the rules load,
   a bridged hook denies, and the done check fires once.
 - **What they need running, and how to start and stop it:** nothing; the tests create and
@@ -56,15 +60,18 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   `gateOnly` in `scripts/hooks.mjs`, which keeps repo hooks off the tools only the gate needs;
   `SHELL_TOOLS` in `scripts/lib/shell-edits.mjs` and the PreToolUse, PostToolUse and
   PostToolUseFailure matchers in `hooks/hooks.json` (a test enforces it); what the breaker
-  rates high (`skills/setup-first-pass/assets/breaker.md`) and what is still fixed after
-  review round 3 in the rules block and `skills/ship-check/SKILL.md` (a test enforces it); the word
+  rates high and its Worst case words (`skills/setup-first-pass/assets/breaker.md`), what is
+  fixed right away in the rules block and `skills/ship-check/SKILL.md`, and `FIX_NOW` in
+  `scripts/lib/jev.mjs` (a test enforces it); the word
   **Sharpened** in `skills/sharpen/SKILL.md` step 5 and `SHOWN` in the gate; the transcript row shapes `typedText` in
   `scripts/lib/words.mjs` knows and what Claude Code writes (a new row kind is silently left
   out or wrongly kept).
 - **Extra pre-mortem cases** (this repo's own ways to run twice, end, or scale): a plugin
   update with an unchanged version is not picked up by `claude plugin update`, so every
   release bumps `plugin.json`; a change to a managed block reaches a user only when they
-  re-run setup; users are on Windows, macOS and Linux (paths, shells, `\r\n`).
+  re-run setup; users are on Windows, macOS and Linux (paths, shells, `\r\n`); the Jev judge
+  is an outside call on every finding asked about (a deadline, bounded retries, and a
+  fallback to the rules on any failure).
 - **Owner rules:** never name the private projects first-pass came from (CI checks); the
   GitHub account is the owner's personal one, and nothing is pushed before the owner creates
   the repo.

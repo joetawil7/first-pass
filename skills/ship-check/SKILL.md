@@ -20,7 +20,7 @@ run. Steps 3 and 4 run once for all of them, after the last item is built: one r
 item (small items that touch the same code can share one), started together only where the
 repo's test limits say side-by-side runs are safe (at most three at once), otherwise one
 after another; then CI's full checks once, in one clean checkout holding every item. The
-report answers each item.
+report answers each item, and every item's list of smaller findings comes in it, once.
 
 Nothing is pushed, merged, deployed, migrated or published until steps 3 and 4 are finished
 for a clean checkout holding exactly what it ships (failures the base has too are named,
@@ -79,31 +79,60 @@ for, the repo, the base ref or file list, and the pre-mortem. It must run in its
 context. If your tool cannot start one, ask the user to run the breaker in a new chat;
 never review in the context that wrote the code.
 
-For each finding:
+Sort each finding by its worst case, never by the severity the reviewer gave it:
 
-- Real (CONFIRMED, or PLAUSIBLE and you confirm it), and its scenario breaks the task or a
-  promise in the repo's rules, invariants or docs, or does real harm (money lost, wrongly
-  charged or spent without a cap, lost or leaked data, a side effect done twice, a security
-  hole, a legal breach, a crash): fix it,
-  with its own failing-first test (step 2).
-- Real, but its worst case stays inside what the repo promises: list it under Open with
-  why; don't build for it.
-- Disagree: say why in the report, with file:line.
-- Real but out of scope (the change neither caused it nor made it worse): list it under
-  Open.
+- **Real harm: fix it now.** Real (CONFIRMED, or PLAUSIBLE and you confirm it), and its
+  scenario does real harm (money lost, wrongly charged or spent without a cap, lost or
+  leaked data, a side effect done twice, sent wrong or sent without the yes it needs, a
+  security hole, a legal breach, a crash, work left stuck: a job that never finishes, or a
+  person who can't finish what they started), or it stops the change doing what it was for.
+  Fix it with its own failing-first test (step 2), and run the breaker on that fix, again on
+  each new real-harm fix, until one review finds no new real harm.
+- **Smaller: list it.** Real, but none of the above: words wrong in some state, a button that
+  shows when it does nothing, a clumsier path. Don't fix it, and don't ask the user about it
+  during the work: put it on the item's list with its worst case and who meets it.
+- **Disagree:** say why in the report, with file:line.
+- **Out of scope** (the change neither caused it nor made it worse): on the list, marked as
+  older than the change, whatever its harm; a real harm among them is named first.
 
-If the fixes were more than small, run the breaker again on the fixes: round 2, and round 3
-on round 2's fixes if they were more than small too. A fix that touches code another item
-in the same prompt uses always gets round 2, on the combined diff. Rounds are counted per
-item; say the count in the reply after each round ("review round 2 of 3 for item 1"), so
-it survives a compacted context. After round 3, stop: only a finding that does real harm
-(see above), whatever severity it was given, is still fixed, and so is a CI failure the
-change caused (step 4); each such fix gets a review of that fix, repeated until one finds no
-new real harm in it. Disputed and out-of-scope findings stay listed, not fixed again. Every
-other finding goes under Open with its worst case, for the user to decide, and an item left
-with an open finding in its scope that breaks the task or a promise in the repo's rules,
-invariants or docs is reported as built, not done. More rounds for other findings only when
-the user asks.
+A fix that touches code another item in the same prompt uses gets its review on the combined
+diff. Say after each review what it found and what is left ("item 1: review of the fix found
+no new real harm; 3 on the list"), so it survives a compacted context.
+
+The list goes to the user once, at the end (step 8), numbered, each with its worst case and
+who meets it, with one question: which to fix. The fixes they pick are built together, with
+the proof step 2 asks for (or the one the Jev judge picks, below), and get one review
+together. That review's real harm is fixed as above; its smaller findings go on a new list
+in that report, not fixed unasked.
+
+**The Jev judge** (Claude Code plugin, when the user has set it up with `/first-pass:jev`;
+`node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" jev status <repo>` says whether it is on for
+this repo). Write the findings to a JSON file in the system temp folder, one object each:
+`{"id": "3", "scenario": "<the inputs or state, then the wrong result>", "worst_case": "<money|data|twice|security|legal|crash|stuck|task|small>", "who": "<everyone|feature|unusual|nobody>"}`,
+using the breaker's Worst case and Who meets it. Leave customers' data out of the scenario
+(the script also blanks secrets, emails and phone numbers before it sends anything to
+TypeSafe). Then `node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" jev ask harm <file> <repo>`,
+where `<repo>` is the repo's own folder (never the temp clean checkout: the key is chosen by
+it), prints a verdict for each:
+
+- `fix now`: real harm (the review named it, or Jev found it): fix it now, unless it is out
+  of scope, which puts it first on the list. Jev can make a finding real harm; it never
+  clears one the review named, and you may still treat any finding as real harm yourself,
+  never the reverse.
+- `list`: smaller; it goes on the list.
+- `rule`: Jev was not used or was unsure (the reason is printed): sort it yourself, as above.
+  A `jev ask` that fails or is stopped before it prints means `rule` for every finding.
+
+In the files for the next two questions, a finding sorted as real harm (by the review, by Jev
+or by you) carries that harm as its `worst_case` (Jev's `choice` when Jev found it), so the
+script recommends fixing it now and gives its fix the full proof. For the list,
+`node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" jev ask priority <file> <repo>` gives each
+finding the answer to recommend (`fix now` or `leave listed`; `rule`: your own). For each fix
+the user picks, add `"fix": "<what the fix changes, one line>"` and run
+`node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" jev ask proof <file> <repo>`: `checks`
+(format, lint, type and build checks and reading the changed text), `unit`, `real` (a test
+against the real database or service) or `browser`; `rule` means step 2 as written. A
+real-harm fix always gets step 2 as written. Delete the findings file when done.
 
 ## 4. CI's own checks, in the clean checkout
 
@@ -114,8 +143,7 @@ deletion or auth). Follow the project's rules for heavy runs.
 
 A failure that also happens on the base without the change is pre-existing: name the test
 and move on. A failure the change caused gets a fix; a fix that is more than small goes
-back to step 3 (it counts as a round; after round 3 it is reviewed like a fix for real
-harm), and the full checks run again. Then remove the worktree (`git -C <repo> worktree remove --force <path>`) and any leftovers,
+back to step 3, reviewed like a fix for real harm, and the full checks run again. Then remove the worktree (`git -C <repo> worktree remove --force <path>`) and any leftovers,
 including copied env files.
 
 ## 5. Monitoring
@@ -127,7 +155,10 @@ fires if the exact failure ever happens again.
 ## 6. Words
 
 Search UI strings, emails and notifications, help, docs, and pricing and legal pages for
-sentences about what changed. Each is confirmed true or changed. Changes to legal, pricing
+sentences about what changed. Each is confirmed true or changed. A sentence a review finds
+untrue only in some state (after an unusual order of steps, a race or an error), and that is
+not legal, pricing or privacy text, is a smaller finding: it goes on the item's list (step
+3), not changed mid-work. Changes to legal, pricing
 or public copy get their own line in the report.
 
 ## 7. Invariants
@@ -143,7 +174,8 @@ review.
 ```
 <What changed, one plain line: what the user can now do or will notice>
 Verified: <what was run and how much of it, said plainly> → <result>, one line each (the test that failed before and passes now, with pass and fail counts; CI's checks)
-Fresh review: <what the second reviewer found: n fixed, n disputed, n open>
+Fresh review: <what the second reviewer found: n fixed, n disputed, n on the list>
+To pick: <the list of smaller and older findings, numbered, each with its worst case and who meets it>
 Not verified: <each thing, and why>
 Not handled, because: <each, from the pre-mortem>
 Not built: <each guess left out, one line each>

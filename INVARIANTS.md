@@ -57,10 +57,27 @@ holds it today and where it is known to break.
    Past 10 gated calls per reply, the `MAX_CALLS` backstop can end the hold a reply early.
    A tool Claude Code adds later is free until it is named in `GATED_TOOLS` and hooks.json.
    Writing the word "Sharpened" releases it: it is a nudge, not a lock.
-10. **The plugin's own scripts make no network call (the README promises it).**
+10. **The plugin's own scripts make no network call (the README promises it), except the Jev judge once the user has set it up: it sends only to the configured https endpoint (or this machine), only the findings asked about with secrets, emails and phone numbers blanked, and never prints the key.**
    Held by: `shellRoots` in `scripts/lib/shell-edits.mjs`, which only looks up paths inside the
    main folder and never a `//host` or `\\host` one (on Windows, looking one up contacts that
-   host); the `shellRoots` test in `test/lib.test.mjs` fails if one is looked up.
+   host); the `shellRoots` test in `test/lib.test.mjs` fails if one is looked up. For the
+   judge: `judgeFor`, `checkUrl`, `stateFor` (through `redact`), `keyFor` (the key trimmed
+   where it is read) and `post` (no text the server or the network layer supplies is printed, only status
+   and error codes, and a model id of a fixed shape, scrubbed) in `scripts/lib/jev.mjs`;
+   `test/jev.test.mjs`.
    Known breaks: a repo, main folder or working folder that itself lives on a network share
    or a mapped network drive is read over the network by `git status`, as the user's own
-   git does.
+   git does. Redaction is pattern-based (see 8), so a secret with no telltale shape inside a
+   finding's text is sent. The key for a folder is chosen by path and git (`repoHome` in
+   `scripts/lib/jev.mjs`); a config with separate accounts has no default key, so a folder no
+   entry names has the judge off. Known gaps: a submodule or a nested clone inside a worktree
+   that sits in a folder named for another account gets that account's key; a worktree's
+   subfolder whose twin in the main checkout is named separately gets the whole repo's key;
+   configured paths are resolved on every call, which waits on an offline network share.
+11. **The Jev judge never clears a finding the review named as real harm (nor recommends leaving one on the list), never picks a lighter proof for a real-harm fix or one with no worst case, never follows a redirect, and a failed, unreadable or unsure answer leaves the call to the rules, never to the lighter side.**
+   Held by: `settled` and `decide` (with `FLOORS`), and `once` (a redirect is never followed; one deadline covers the whole exchange), in
+   `scripts/lib/jev.mjs`; `test/jev.test.mjs`. The rules and ship-check say the agent may still treat any finding as
+   real harm, never the reverse.
+   Known breaks: a finding the review labelled small that is really harm stays small unless
+   Jev or the agent sees the harm; Jev leaning toward "small" (as seen in a trial) does not
+   clear it, but it does not catch it either.

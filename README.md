@@ -16,9 +16,9 @@ only). You set it up once, in the folder that holds your repos.
   `file:line`, a test, or a gap you decide to accept.
 - **While building,** anything the task didn't ask for (a helper, a cap, a retry, an option)
   has to earn its place. The agent asks whether it needs to exist, leaves it out when
-  nothing requires it, and lists it under "Not built" so you can ask for it. A review
-  finding gets fixed in code only when it breaks the task or a written promise, or does real
-  harm; the rest are listed as open, with why.
+  nothing requires it, and lists it under "Not built" so you can ask for it. During the
+  work, a review finding gets fixed only when it does real harm or stops the change doing its
+  job; the rest come to you as one list at the end, to pick from.
 - **Before "done",** a second agent that didn't write the code reviews it in a fresh
   context. "Done" needs a test that failed before the change and CI's checks passing in a
   clean checkout; anything less is reported as built, not done.
@@ -110,6 +110,7 @@ first-pass names those checks, and asks for proof before anything is called done
 | `habit-words` | Reads what you typed in your recent sessions and maps words like "be 100% sure" to the checks they should mean | At setup, then when due |
 | `sharpen` | Rewrites the prompt you type after it: numbered asks, habit words turned into checks, names and numbers kept exactly. Shows you the rewrite, then works from it | Only when you type it |
 | `review` | Reviews your own branch before you ask for review (type nothing after it), or a teammate's PRs, several repos at once. Checks the change against its ticket, judges the failed checks and every Bugbot comment, runs the breaker, traces the other code that uses what changed, proves each finding or marks it unproven, and says what the merge needs and how to check the deploy. Reads GitHub and never posts; pushes a fix only on your yes | Only when you type it |
+| `jev` | Sets up the optional Jev judge (TypeSafe's decision model), which `ship-check` asks whether a review finding is real harm, which small ones to fix now, and what proof a small fix needs | Only when you type it |
 | Hooks | Run each repo's own hooks from the main folder, send back a "done" with no evidence, say what drifted at session start, and hold `sharpen`'s work until its rewrite is shown | Every session |
 
 ## If you keep all your repos in one folder
@@ -165,13 +166,17 @@ What it reads and keeps:
   the root, and `.claude/cursor-rules/*.md` copies where a repo imports `.mdc` files.
 - A small state folder in `~/.claude/plugins/data/` for the hooks, and a temp file while
   `habit-words` runs, deleted when it's done.
+- `~/.claude/first-pass/jev.json`, only if you set up the Jev judge: which variable holds
+  your key, and for which repos. Never the key itself.
 
-Setup never commits, pushes or sends anything anywhere: you review the files and commit
-them. The plugin's own scripts make no network calls and read no keys or tokens from your
-environment. The only
-skill that reaches a server is `review`: it reads the PRs, checks and comments through
-your own `gh` login, and it pushes a fix only when you picked that fix and said yes to the
-push.
+Setup never commits or pushes, and sends nothing anywhere except one test request per key
+to TypeSafe if you set up the Jev judge: you review the files and commit them. The plugin's own
+scripts make no network calls and read no keys or tokens from your environment, with one
+exception you have to switch on: the Jev judge reads the one key you named and sends review
+findings (with secrets, emails and phone numbers blanked) to TypeSafe's API, from
+`ship-check` and `jev`. Besides that, the only skill that reaches a server is `review`: it
+reads the PRs, checks and comments through your own `gh` login, and it pushes a fix only
+when you picked that fix and said yes to the push.
 
 ## Install
 
@@ -250,6 +255,15 @@ publishing, scheduling and other skills until the rewrite is on screen (reading 
 never held back): with the
 instruction alone, the rewrite was skipped in 7 of my 11 test runs.
 
+If you have a [TypeSafe](https://docs.typesafe.ai) API key, `/first-pass:jev` turns on a
+second opinion for `ship-check`: Jev, a model that only picks from a list and says how sure
+it is, judges whether each review finding is real harm, which small ones are worth fixing
+now, and what proof a small fix needs (the checks alone, a unit test, a real-database test
+or a browser test). It is cheap and fast, but when I had it sort 269 audit issues it gave
+more weight to how many people meet an issue than to how bad the harm is. So it can make a
+finding serious, never clear one the reviewer called serious, and when it is unsure or
+fails, the rules decide as if it weren't there.
+
 ## How the rules were tested
 
 I test a rule the way I'd test code: fresh Claude Code sessions and agents (Opus, high
@@ -289,11 +303,15 @@ they help on your code.
   (three reviewer passes). The trade is fewer rounds after "done". The pre-mortem scales
   with the change: a copy tweak answers it in one line. To keep the cost down, a prompt with
   several items builds them all first, then reviews them and runs CI's full checks once at
-  the end. Review rounds stop after three: after that, only serious findings (money, data,
-  something done twice, security, legal, a crash) are still fixed and checked again, and the
-  rest come to you as a list.
+  the end. During the work, only serious findings (money, data, something done twice or sent
+  wrong, security, legal, a crash, stuck work, the change not doing its job) are fixed and
+  checked again. The smaller ones
+  come to you once, as one list at the end, and the ones you pick get one review together.
+  Before this, a reviewer finding a small case, a question to you, a fix and another review
+  of that fix could chain for hours: in one two-day stretch, about a third of 84 reviews
+  found only small points, and most of them still started another round.
 - **It won't make code bug free.** The aim is fewer and smaller escapes: no high-severity
-  ones, no bug class found twice. This is version 0.4, so that's the design, not a measured
+  ones, no bug class found twice. This is version 0.5, so that's the design, not a measured
   result yet.
 - **Rules alone fade.** The fixes that last are the ones `fix-the-class` pushes toward: a
   shared helper that's the only way to do a thing, a database constraint, a CI check.

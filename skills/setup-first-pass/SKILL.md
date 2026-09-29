@@ -88,6 +88,12 @@ In one message, only what matters and is not inferable:
 - **Teammates**, per repo: do other people open this repo on its own, without the main
   folder? Then its own file also carries the rules block (the owner loads it twice), and
   the breaker is copied into it for teammates without the plugin.
+- **The Jev judge** (*plugin*, optional): does the owner have a TypeSafe Jev API key?
+  `ship-check` can then ask Jev whether a review finding is real harm (it can add harm, never
+  clear it), which small ones to fix now, and what proof a small fix needs. If yes: the
+  variable that holds it, whether it is in the environment or in a gitignored env file, and
+  for which repos (a key per account when repos belong to separate accounts). Never ask for
+  the key itself. (Default: not set up; `/first-pass:jev` sets it up later.)
 
 ## 3. The workspace root
 
@@ -278,6 +284,11 @@ If a design skill with its own hooks is installed in one repo (for example Impec
 Its commands then run from inside the project being designed: say so in the root
 `CLAUDE.md` (outside the markers), with the script's full path.
 
+## 6a. The Jev judge (*plugin*, only if the owner has a key)
+
+Follow `${CLAUDE_SKILL_DIR}/../jev/SKILL.md` steps 3 and 4 with what the owner said in step 2:
+write its config, then `jev status` and `jev test` once per key.
+
 ## 7. Check your own work
 
 - Re-read every file you wrote: each block exactly once per repo across its CLAUDE.md and
@@ -301,6 +312,7 @@ Hooks run from the main folder: <id: scope, repos>, or "none"
 Habit words: <n> mapped from <n> sessions | the default list | not installed
 Invariants: <n> drafted in <repo>/INVARIANTS.md, review before relying on them (one line per repo)
 Real tests: <per repo: what exists, or "none: the biggest gap">
+Jev judge: <on for <repos> (key from <NAME>) | not set up>
 Verified: <command> → <result>
 Not done: <each step that could not run, and the command to finish it>
 Conflicts with existing rules: <each, or "none">

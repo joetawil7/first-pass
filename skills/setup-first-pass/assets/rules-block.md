@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.4.4 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.5.0 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -76,18 +76,17 @@ skill has the full procedure.
   reproduces it end to end (a real database beats a mock where the bug could live in a
   query); (2) a fresh review: the `breaker` agent on the diff in its own context, never the
   one that wrote the code, with each finding it proves fixed, disputed with file:line, or
-  listed as open. A finding is fixed in code when its scenario breaks the task or a promise in
-  the repo's rules, invariants or docs, or does real harm (money lost, wrongly charged or spent
-  without a cap, lost or leaked data, a side effect done twice, a security hole, a legal
-  breach, a crash); one whose worst case
-  stays inside what the repo promises is listed as open with why, not built for. Reviews run
-  at most three rounds per item (the first and two on its fixes). After round 3, only a
-  finding that does real harm, whatever severity it was given, is still fixed, and so is a
-  CI failure the change caused; each such fix gets a review of that fix, repeated until one
-  finds no new real harm in it, while disputed and out-of-scope findings (the change neither
-  caused them nor made them worse) stay listed. The
-  rest go to the user as open, and an item left with an open finding in its scope that
-  breaks the task or a promise in the repo's rules, invariants or docs is built, not done;
+  listed. A finding is fixed right away only when its worst case does real harm (money lost,
+  wrongly charged or spent without a cap, lost or leaked data, a side effect done twice, sent
+  wrong or sent without the yes it needs, a security hole, a legal breach, a crash, work left
+  stuck), whatever severity it was given, or stops the change doing what it was for; so is a
+  CI failure the change caused. Each such fix gets a review of that fix, repeated until one
+  finds no new real harm in it. Every other finding (smaller ones, and those the change
+  neither caused nor made worse) goes on one list per item and is neither fixed nor asked
+  about during the work: the user gets the list once, at the end, and the fixes they pick get
+  one review together. When the user has set up the Jev judge, `ship-check` asks it too: it
+  can make a finding real harm, never clear one. An item with real harm it caused or made worse
+  still open is built, not done;
   (3) CI's own
   checks passing in a clean checkout holding only this change (or this prompt's items) on
   top of its base. Short of that, it is reported as built, not done, and nothing it ships is
@@ -100,10 +99,11 @@ skill has the full procedure.
   item touches. Then one fresh review per item (small items that touch the same code can share
   one), its findings handled as above: started together only where the repo's test limits
   say side-by-side runs are safe (at most three at once), otherwise one after another. A fix
-  that touches code another item uses gets a second-round review of the combined diff. Then
+  that touches code another item uses gets its review on the combined diff. Then
   CI's full checks once, in one clean checkout holding every item; if they fail, a fix that
-  is more than small is reviewed (it counts as a round), and the full checks run again. A
-  full suite runs mid-work only when the next item depends on its result.
+  is more than small is reviewed, and the full checks run again. The items' lists of smaller
+  findings reach the user together, once. A full suite runs mid-work only when the next item
+  depends on its result.
 - **Scale it to the change.** A change with no logic in it (a comment, a doc, a spelling
   fix that changes no behaviour) needs only the repo's format, lint and build checks, plus
   the words check when people read the text. A change that alters behaviour gets all of it,

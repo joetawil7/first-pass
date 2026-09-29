@@ -15,6 +15,10 @@
 //                                               to a temp file, with counts per phrase family
 //   node cli.mjs words --count <regex> ...      how many of those prompts match each regex
 //   node cli.mjs words --delete <file>          deletes a file `words` wrote
+//   node cli.mjs jev status [repo]              whether the Jev judge is on for a repo, and where its key comes from
+//   node cli.mjs jev test <repo>                one request with a made-up finding, to check the key works
+//   node cli.mjs jev ask harm|priority|proof <findings.json> <repo>
+//                                               Jev's verdict on each finding, as JSON ("rule" = decide by the rules)
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,6 +28,7 @@ import { ciFiles, ciHash } from './lib/ci.mjs';
 import { checkCursorRules, syncCursorRules } from './lib/cursor-rules.mjs';
 import { drift } from './lib/drift.mjs';
 import { approval } from './lib/fingerprint.mjs';
+import { JEV_URL, configPath, judge, judgeFor, readFindings } from './lib/jev.mjs';
 import { repoHooksHash } from './lib/instructions.mjs';
 import { surveyWorkspace } from './lib/survey.mjs';
 import { countMatching, deleteWordsFile, projectsDir, readRecent, removeStaleWordsFiles, summary, writeWordsFile } from './lib/words.mjs';
@@ -112,6 +117,35 @@ async function words(options) {
   ].join('\n');
 }
 
+const JEV_TEST = {
+  id: 'test',
+  scenario: 'A made-up finding to check the key works: the Save button reads "Save" where the design says "Save changes". Nothing else changes.',
+  worst_case: 'small',
+};
+
+async function jev([sub, ...rest]) {
+  if (sub === 'status' || sub === 'test') {
+    // A request needs the repo named: without it the default key could be another account's.
+    if (sub === 'test' && !rest[0]) throw new Error('jev test needs the repo whose key to try');
+    const repo = path.resolve(rest[0] ?? '.');
+    const on = judgeFor(repo);
+    const where = on.on && on.url !== JEV_URL ? `, sends to ${on.url}` : '';
+    if (sub === 'status') return `Jev judge for ${repo}: ${on.on ? `on, ${on.why}, model ${on.model}${where}` : `off, ${on.why}`}\nconfig: ${configPath()}`;
+    if (!on.on) throw new Error(`Jev judge for ${repo} is off: ${on.why}`);
+    const [result] = await judge('harm', [JEV_TEST], on);
+    if (!result.used) throw new Error(`Jev did not answer: ${result.why}`);
+    return `Jev answered "${result.choice}" (confidence ${result.confidence}, model ${result.model}) to one made-up finding. ${on.why}.`;
+  }
+  if (sub === 'ask') {
+    const [kind, file, repo] = rest;
+    if (!['harm', 'priority', 'proof'].includes(kind)) throw new Error('jev ask takes harm, priority or proof, then the findings file and the repo');
+    if (!file || !repo) throw new Error('jev ask needs the findings file and the repo the findings are in');
+    const findings = readFindings(file);
+    return JSON.stringify(await judge(kind, findings, judgeFor(path.resolve(repo))), null, 2);
+  }
+  throw new Error('usage: node cli.mjs jev status [repo] | test <repo> | ask harm|priority|proof <findings.json> <repo>');
+}
+
 const args = process.argv.slice(2);
 const command = args[0];
 const flags = [];
@@ -147,7 +181,14 @@ if (command === 'survey') {
   console.log(lines.length ? lines.join('\n') : 'first-pass: nothing out of date');
 } else if (command === 'words') {
   console.log(await words(options));
+} else if (command === 'jev') {
+  try {
+    console.log(await jev(positional));
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 2;
+  }
 } else {
-  console.error('usage: node cli.mjs survey|check [workspace] | record [workspace] [--ci <repo>|all] | cursor-rules <repo> [--check] | words [--sessions <n>] [--count <regex>] [--delete <file>]');
+  console.error('usage: node cli.mjs survey|check [workspace] | record [workspace] [--ci <repo>|all] | cursor-rules <repo> [--check] | words [--sessions <n>] [--count <regex>] [--delete <file>] | jev status|test|ask ...');
   process.exitCode = 2;
 }
