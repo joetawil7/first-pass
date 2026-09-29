@@ -10,7 +10,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { FIX_NOW, JEV_URL, configPath, decide, entryFor, judge, judgeFor, keyFor, loadConfig, readDotenv, readFindings, requestBody } from '../scripts/lib/jev.mjs';
+import { FIX_NOW, JEV_URL, PROOFS, configPath, decide, entryFor, judge, judgeFor, keyFor, loadConfig, readDotenv, readFindings, requestBody } from '../scripts/lib/jev.mjs';
 
 const CLI = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'scripts', 'cli.mjs');
 const KEY = 'ts-test-key-5f3a9c1e7b2d';
@@ -155,17 +155,59 @@ test('no text the server sends is printed: an error shows its status, a bad pick
 
 // A server that sends its headers and part of a body holding the key, then stalls or drops.
 async function halfAnswer(then) {
+  let count = 0;
   const server = http.createServer((req, res) => {
+    count++;
     req.resume();
     req.on('end', () => {
       res.writeHead(200, { 'content-type': 'application/json', 'content-length': '500' });
       res.write(`{"model":"${KEY}","answers":`);
       if (then === 'drop') setTimeout(() => res.socket.destroy(), 50);
+      if (then === 'reset') setTimeout(() => res.socket.resetAndDestroy(), 50);
     });
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  return { url: `http://127.0.0.1:${server.address().port}/v1/systemone`, close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }) };
+  return { url: `http://127.0.0.1:${server.address().port}/v1/systemone`, requests: () => count, close: () => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }) };
 }
+
+test('a connection reset after the answer started is "cut off", and not sent again', { timeout: 10000 }, async () => {
+  const server = await halfAnswer('reset');
+  try {
+    const [r] = await judge('harm', [small()], on(server));
+    assert.equal(r.why, 'Jev not used: the answer was cut off');
+    assert.equal(server.requests(), 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test('a refused request says what to check, still without the server\'s text', async () => {
+  for (const [status, hint] of [[402, /out of credit/], [422, /"model"/], [400, /"model"/], [403, /no access/], [404, /"url"/]]) {
+    const server = await fakeJev(() => ({ status, body: { detail: 'server words' } }));
+    try {
+      const [r] = await judge('harm', [small()], on(server));
+      assert.match(r.why, hint, String(status));
+      assert.match(r.why, new RegExp(`HTTP ${status}`));
+      assert.doesNotMatch(r.why, /server words/);
+    } finally {
+      await server.close();
+    }
+  }
+});
+
+test('one run has a time budget: findings left when it runs out get "rule"', { timeout: 10000 }, async () => {
+  const server = await fakeJev(() => 'hang');
+  try {
+    const started = Date.now();
+    const results = await judge('harm', Array.from({ length: 20 }, (_, i) => ({ ...small(), id: `F${i}` })), on(server, { timeoutMs: 900, budgetMs: 1000 }));
+    const took = Date.now() - started;
+    assert.ok(took < 1500, `took ${took} ms`);
+    assert.ok(results.every((r) => r.verdict === 'rule'));
+    assert.ok(results.some((r) => /time budget/.test(r.why)), 'the ones not asked say why');
+  } finally {
+    await server.close();
+  }
+});
 
 test('an answer that stalls after it starts is given up on at the deadline', { timeout: 5000 }, async () => {
   const server = await halfAnswer('stall');
@@ -335,6 +377,145 @@ test('with separate accounts there is no default key: a folder no entry names ha
   assert.equal(r.verdict, 'rule');
 });
 
+test('a submodule in a worktree, and a worktree\'s subfolder, get the key their place in the main checkout has', { timeout: 30000 }, async () => {
+  const run = promisify(execFile);
+  const git = (dir, ...a) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'protocol.file.allow=always', ...a], { stdio: 'ignore' });
+  const sub = path.join(tempDir(), 'lib');
+  fs.mkdirSync(sub);
+  git(sub, 'init', '-q');
+  git(sub, 'commit', '-q', '--allow-empty', '-m', 'x');
+  const a = path.join(tempDir(), 'company-a');
+  fs.mkdirSync(path.join(a, 'packages', 'x'), { recursive: true });
+  fs.writeFileSync(path.join(a, 'packages', 'x', 'f.txt'), 'x');
+  git(a, 'init', '-q');
+  git(a, 'submodule', 'add', '-q', sub, 'lib');
+  git(a, 'add', '-A');
+  git(a, 'commit', '-q', '-m', 'x');
+  // A worktree inside a folder named for another account, with its submodule checked out.
+  const other = tempDir();
+  const worktree = path.join(other, 'a-wt');
+  git(a, 'worktree', 'add', '-q', '--detach', worktree);
+  git(worktree, 'submodule', 'update', '--init', '-q');
+  const findings = path.join(tempDir(), 'f.json');
+  fs.writeFileSync(findings, JSON.stringify([small()]));
+  const server = await fakeJev(() => answer('harm', 'small', 0.9));
+  const keys = [{ env: 'FP_A', repos: [a] }, { env: 'FP_B', repos: [other] }, { env: 'FP_C', repos: [path.join(a, 'packages', 'x')] }];
+  const env = { ...process.env, CLAUDE_CONFIG_DIR: configDir({ url: server.url, keys }), FP_A: 'key-of-a', FP_B: 'key-of-b', FP_C: 'key-of-c' };
+  try {
+    for (const where of [path.join(worktree, 'lib'), path.join(worktree, 'packages', 'x')]) await run(process.execPath, [CLI, 'jev', 'ask', 'harm', findings, where], { env });
+    assert.deepEqual(server.requests.map((r) => r.auth), ['Bearer key-of-a', 'Bearer key-of-c']);
+  } finally {
+    await server.close();
+  }
+});
+
+test('the deepest name wins across links, a nested clone in a worktree gets its place\'s key, and an odd git setup cannot loop', { timeout: 30000 }, async () => {
+  const run = promisify(execFile);
+  const git = (dir, ...a) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { stdio: 'ignore' });
+  const parent = tempDir();
+  const a = path.join(parent, 'company-a');
+  fs.mkdirSync(a);
+  git(a, 'init', '-q');
+  git(a, 'commit', '-q', '--allow-empty', '-m', 'x');
+  const link = path.join(tempDir(), 'link-to-a');
+  fs.symlinkSync(a, link, process.platform === 'win32' ? 'junction' : 'dir');
+  const other = tempDir();
+  const worktree = path.join(other, 'a-wt');
+  git(a, 'worktree', 'add', '-q', '--detach', worktree);
+  const nested = path.join(worktree, 'tools', 'nested');
+  fs.mkdirSync(nested, { recursive: true });
+  git(nested, 'init', '-q');
+  const findings = path.join(tempDir(), 'f.json');
+  fs.writeFileSync(findings, JSON.stringify([small()]));
+  const server = await fakeJev(() => answer('harm', 'small', 0.9));
+  const ask = (keys, where) => run(process.execPath, [CLI, 'jev', 'ask', 'harm', findings, where], { env: { ...process.env, CLAUDE_CONFIG_DIR: configDir({ url: server.url, keys }), FP_A: 'key-of-a', FP_B: 'key-of-b' } });
+  try {
+    // B names the parent by its real path; A names its repo, inside it, through a link: A is deeper.
+    await ask([{ env: 'FP_B', repos: [parent] }, { env: 'FP_A', repos: [link] }], a);
+    // A nested clone inside A's worktree, which sits in a folder named for B.
+    await ask([{ env: 'FP_A', repos: [a] }, { env: 'FP_B', repos: [other] }], nested);
+    assert.deepEqual(server.requests.map((r) => r.auth), ['Bearer key-of-a', 'Bearer key-of-a']);
+  } finally {
+    await server.close();
+  }
+  // A work tree set by hand to a folder inside the repo: git names a top that does not hold the
+  // asked folder, which must end the search, not repeat it.
+  const odd = tempDir();
+  git(odd, 'init', '-q');
+  fs.mkdirSync(path.join(odd, 'w'));
+  git(odd, 'config', 'core.worktree', path.join(odd, 'w'));
+  const env = { ...process.env, CLAUDE_CONFIG_DIR: configDir({ keys: [{ env: 'FP_A', repos: [a] }] }) };
+  const started = Date.now();
+  await run(process.execPath, [CLI, 'jev', 'status', odd], { env, timeout: 8000 });
+  assert.ok(Date.now() - started < 8000);
+});
+
+test('a path that is not a folder (a typo, a file) inside a worktree in another account\'s folder has the judge off', { timeout: 30000 }, async () => {
+  const run = promisify(execFile);
+  const git = (dir, ...a) => execFileSync('git', ['-C', dir, '-c', 'user.email=t@t', '-c', 'user.name=t', ...a], { stdio: 'ignore' });
+  const a = path.join(tempDir(), 'company-a');
+  fs.mkdirSync(a);
+  git(a, 'init', '-q');
+  git(a, 'commit', '-q', '--allow-empty', '-m', 'x');
+  const other = tempDir();
+  const worktree = path.join(other, 'a-wt');
+  git(a, 'worktree', 'add', '-q', '--detach', worktree);
+  fs.writeFileSync(path.join(worktree, 'file.ts'), 'x');
+  const findings = path.join(tempDir(), 'f.json');
+  fs.writeFileSync(findings, JSON.stringify([small()]));
+  const server = await fakeJev(() => answer('harm', 'small', 0.9));
+  const env = { ...process.env, CLAUDE_CONFIG_DIR: configDir({ url: server.url, keys: [{ env: 'FP_A', repos: [a] }, { env: 'FP_B', repos: [other] }] }), FP_A: 'key-of-a', FP_B: 'key-of-b' };
+  const ask = (where) => run(process.execPath, [CLI, 'jev', 'ask', 'harm', findings, where], { env });
+  try {
+    for (const where of [path.join(worktree, 'typo'), path.join(worktree, 'file.ts')]) {
+      const out = await ask(where);
+      assert.equal(JSON.parse(out.stdout)[0].verdict, 'rule');
+      assert.match(JSON.parse(out.stdout)[0].why, /not a folder/);
+    }
+    assert.equal(server.requests.length, 0, 'nothing is sent for a path that is not a folder');
+  } finally {
+    await server.close();
+  }
+});
+
+test('plain http (this machine) never goes through a proxy set in the environment', { timeout: 30000 }, async (t) => {
+  const run = promisify(execFile);
+  const proxied = [];
+  const proxy = http.createServer((req, res) => { proxied.push(req.headers.authorization ?? null); res.writeHead(502); res.end(); });
+  await new Promise((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const server = await fakeJev(() => answer('harm', 'small', 0.9));
+  const env = { ...process.env, NODE_USE_ENV_PROXY: '1', HTTP_PROXY: `http://127.0.0.1:${proxy.address().port}`, NO_PROXY: '', no_proxy: '' };
+  try {
+    // Only a Node that honours NODE_USE_ENV_PROXY (22.21+, 24.5+) can show the difference: it
+    // sends a request for a closed port to the proxy; one that does not just fails to connect.
+    await run(process.execPath, ['-e', "require('http').get('http://127.0.0.1:1/probe', (r) => r.resume()).on('error', () => {})"], { env });
+    if (!proxied.length) { t.skip(`Node ${process.version} does not use NODE_USE_ENV_PROXY`); return; }
+    proxied.length = 0;
+    const repo = tempDir();
+    const findings = path.join(tempDir(), 'f.json');
+    fs.writeFileSync(findings, JSON.stringify([small()]));
+    const before = server.requests.length;
+    await run(process.execPath, [CLI, 'jev', 'ask', 'harm', findings, repo], { env: { ...env, CLAUDE_CONFIG_DIR: configDir({ url: server.url, keys: [{ env: 'FP_TEST_JEV_KEY', repos: [repo] }] }), FP_TEST_JEV_KEY: KEY } });
+    assert.equal(server.requests.length, before + 1, 'the request went straight to this machine');
+    assert.deepEqual(proxied, [], 'the proxy saw nothing, so never the key');
+  } finally {
+    proxy.closeAllConnections();
+    await new Promise((resolve) => proxy.close(resolve));
+    await server.close();
+  }
+});
+
+test('a config that cannot be read says so, and is not called bad JSON', () => {
+  const dir = tempDir();
+  fs.mkdirSync(path.join(dir, 'first-pass', 'jev.json'), { recursive: true });
+  assert.match(loadConfig({ CLAUDE_CONFIG_DIR: dir }).problem, /cannot be read/);
+});
+
+test('the "checks only" proof never covers a label whose meaning changes', () => {
+  assert.match(PROOFS.checks, /no behaviour/);
+  assert.match(PROOFS.checks, /meaning/);
+});
+
 test('a worktree or a linked folder gets its repo\'s key', async () => {
   const run = promisify(execFile);
   const repo = path.join(tempDir(), 'company-a');
@@ -477,7 +658,8 @@ test('decide never returns "list" for a finding the review named as harm', () =>
 
 test('config: missing is off, a broken one says why, and the url must be https or this machine', () => {
   assert.equal(loadConfig({ CLAUDE_CONFIG_DIR: configDir() }), null);
-  assert.match(loadConfig({ CLAUDE_CONFIG_DIR: configDir('{') }).problem, /cannot be read as JSON/);
+  assert.match(loadConfig({ CLAUDE_CONFIG_DIR: configDir('{') }).problem, /is not valid JSON/);
+  assert.doesNotMatch(loadConfig({ CLAUDE_CONFIG_DIR: configDir('{"keys":[{"env":"K","key":PASTEDSECRETVALUE}]}') }).problem, /PASTEDSECR/, 'a broken config never quotes its own text');
   assert.match(loadConfig({ CLAUDE_CONFIG_DIR: configDir({ keys: [{}] }) }).problem, /needs "env"/);
   assert.match(loadConfig({ CLAUDE_CONFIG_DIR: configDir({ keys: [{ env: 'K', repos: ['relative'] }] }) }).problem, /absolute/);
   assert.match(loadConfig({ CLAUDE_CONFIG_DIR: configDir({ url: 'http://example.com/v1', keys: [] }) }).problem, /https/);
@@ -511,6 +693,7 @@ test('dotenv values: quoted, unquoted with a comment, export, and a missing name
   assert.equal(readDotenv('export K=v3', 'K'), 'v3');
   assert.equal(readDotenv('K=" v4 "', 'K'), 'v4', 'a quoted key is trimmed too');
   assert.equal(readDotenv('K="v5"  # the judge key', 'K'), 'v5', 'a quoted value followed by a comment loses its quotes');
+  assert.equal(readDotenv('K="v6"#note', 'K'), 'v6', 'a comment right after the quote');
   assert.equal(readDotenv('KK=x\nK=', 'K'), null);
 });
 

@@ -1,4 +1,4 @@
-<!-- first-pass:words:start v0.5.0 default (the default list; the habit-words skill replaces it with the words this user actually writes, read from their sessions) -->
+<!-- first-pass:words:start v0.5.1 default (the default list; the habit-words skill replaces it with the words this user actually writes, read from their sessions) -->
 
 ### Habit words
 

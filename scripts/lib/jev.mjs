@@ -9,16 +9,28 @@ import http from 'node:http';
 import https from 'node:https';
 import os from 'node:os';
 import path from 'node:path';
-import { pathKey, isInside } from './paths.mjs';
+import { isDirectory, isInside, pathKey } from './paths.mjs';
 import { redact } from './words.mjs';
 
 export const JEV_URL = 'https://api.typesafe.ai/v1/systemone';
 export const DEFAULT_MODEL = 'jev-latest';
 export const TIMEOUT_MS = 15000;
+// One `jev ask` run stops asking after this, under a shell command's usual 2-minute limit.
+export const BUDGET_MS = 100000;
 export const MAX_FINDINGS = 50;
 export const MAX_FIELD_CHARS = 8000;
 const CONCURRENCY = 4;
 const RETRY_STATUSES = new Set([429, 529]);
+// What to check for a refused request, since the server's own text is never printed.
+const HINTS = {
+  400: 'the request was refused as malformed (check "model" in the config)',
+  402: 'out of credit on this key',
+  403: 'no access for this key',
+  404: 'nothing at that address (check "url" in the config)',
+  422: 'the request was refused as malformed (check "model" in the config)',
+  429: 'busy; try again later',
+  529: 'busy; try again later',
+};
 
 // The worst cases that are fixed right away. The same list is in the rules block, ship-check and
 // the breaker's report (a test keeps them together).
@@ -41,7 +53,7 @@ export const WHO = {
   nobody: 'nobody today: the code path is switched off or not live',
 };
 export const PROOFS = {
-  checks: "The fix changes only words, labels or layout: the repo's format, lint, type and build checks, plus reading the changed text, are enough.",
+  checks: "The fix changes only words, labels or layout, and no behaviour and no label's meaning: the repo's format, lint, type and build checks, plus reading the changed text, are enough.",
   unit: 'The fix changes a condition, a calculation or a mapping in code, with no database, queue or outside call: a unit test that fails before the fix and passes after.',
   real: 'The fix changes what is stored or read, a query, a job, a queue or an outside call: a test against the real database or service, the way the repo runs those.',
   browser: 'The fix changes what a page shows or does in a way only a browser shows (loading, focus, navigation, offline): an end-to-end browser test.',
@@ -94,7 +106,10 @@ export function loadConfig(env = process.env) {
     config = JSON.parse(fs.readFileSync(file, 'utf8'));
   } catch (error) {
     if (error.code === 'ENOENT') return null;
-    return { file, problem: `${file} cannot be read as JSON: ${error.message}` };
+    if (!(error instanceof SyntaxError)) return { file, problem: `${file} cannot be read (${error.code ?? error.name})` };
+    // Only where it breaks: the parser's own message quotes the file's text, which could hold a key.
+    const at = /position (\d+)/.exec(error.message);
+    return { file, problem: `${file} is not valid JSON${at ? ` (near character ${at[1]})` : ''}` };
   }
   const bad = (problem) => ({ file, problem: `${file}: ${problem}` });
   if (!config || typeof config !== 'object' || !Array.isArray(config.keys)) return bad('needs a "keys" list');
@@ -135,13 +150,19 @@ export function checkouts(dir) {
   const result = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel', '--git-common-dir'], { encoding: 'utf8', env });
   const lines = result.status === 0 ? result.stdout.trim().split(/\r?\n/) : [];
   if (lines.length !== 2 || !path.isAbsolute(lines[0])) return { top: null, main: null };
+  // A top that does not hold `dir` (a work tree set by hand elsewhere) is treated as no git, so
+  // every step up from here goes strictly up and the search ends.
+  const top = real(lines[0]);
+  if (!isInside(real(dir), top)) return { top: null, main: null };
   // Older git prints the common folder relative to `dir`. The main checkout holds it as `.git`;
   // anything else (a bare repo, a submodule, a separate git folder) has no main checkout to use.
   const common = path.resolve(dir, lines[1]);
-  return { top: real(lines[0]), main: path.basename(common) === '.git' ? real(path.dirname(common)) : null };
+  return { top, main: path.basename(common) === '.git' ? real(path.dirname(common)) : null };
 }
 
 // The entry whose `repos` names the deepest folder holding `repo`, and that folder; or nulls.
+// Every configured path is compared with links followed, so "deepest wins" holds whichever way
+// a path was written.
 function namedEntry(config, repo) {
   let entry = null, dir = null;
   for (const candidate of config.keys) {
@@ -159,15 +180,34 @@ export function entryFor(config, repo) {
 }
 
 // The folder a key is chosen by, links and junctions followed. A named folder at or inside the
-// asked folder's own checkout wins (a named worktree, or a named folder in a repo). Else the
-// entry naming the repo it is a checkout of (a worktree gets its repo's key, even when it sits
-// inside a folder named for another account). Else a named parent folder, else the default.
+// asked folder's own checkout wins (a named worktree, or a named folder in a repo). Else the same
+// place in the main checkout it belongs to, when a name covers that (a worktree, or a subfolder
+// of one, gets the key its twin in the main checkout has, even inside a folder named for another
+// account). Else the same place under the checkout around this one (a submodule or a nested
+// clone inside a worktree). Else a named parent folder, else the default.
 export function repoHome(config, dir) {
   const direct = real(dir);
   const own = namedEntry(config, direct);
   const { top, main } = checkouts(direct);
   if (own.entry && (!top || isInside(own.dir, top))) return direct;
-  if (main && namedEntry(config, main).entry) return main;
+  const twin = (home, from) => {
+    const place = path.join(home, path.relative(from, direct));
+    return namedEntry(config, place).entry ? place : null;
+  };
+  // Only a worktree has a main checkout other than itself; a repo that is its own main checkout
+  // (a nested clone, say) is placed by the checkout around it, below.
+  if (main && pathKey(main) !== pathKey(top)) {
+    const found = twin(main, top);
+    if (found) return found;
+  }
+  const around = top && path.dirname(top);
+  if (around && around !== top) {
+    const home = repoHome(config, around);
+    if (pathKey(home) !== pathKey(real(around))) {
+      const found = twin(home, real(around));
+      if (found) return found;
+    }
+  }
   return direct;
 }
 
@@ -178,7 +218,7 @@ export function readDotenv(text, name) {
     const m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
     if (!m || m[1] !== name) continue;
     const raw = m[2].trim();
-    const quoted = /^(["'])(.*?)\1(?:\s+#.*)?$/.exec(raw);
+    const quoted = /^(["'])(.*?)\1\s*(?:#.*)?$/.exec(raw);
     const value = (quoted ? quoted[2] : raw.replace(/\s+#.*$/, '')).trim();
     if (value) return value;
   }
@@ -213,6 +253,9 @@ export function judgeFor(repo, env = process.env) {
   if (!config) return { on: false, why: `not set up (no ${configPath(env)})` };
   if (config.problem) return { on: false, why: config.problem };
   if (config.off) return { on: false, why: `switched off in ${config.file}` };
+  // A typo, a removed checkout or a file: git cannot place it, and its path alone could name
+  // another account's folder.
+  if (!isDirectory(repo)) return { on: false, why: `${repo} is not a folder` };
   const found = keyFor(config, repoHome(config, repo), env);
   if (!found.key) return { on: false, why: found.problem };
   return { on: true, key: found.key, why: `key from ${found.where}`, model: config.model ?? DEFAULT_MODEL, url: config.url ?? JEV_URL };
@@ -291,8 +334,9 @@ export function decide(kind, finding, answer) {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// One try: the whole exchange, body included, inside one deadline, on a connection of its own
-// that is closed when the try ends. A redirect is never followed (it would send the findings to
+// One try: the whole exchange, body included, inside one deadline. https goes through Node's
+// shared agent, so a proxy set in the environment is used where Node supports that. A redirect
+// is never followed (it would send the findings to
 // a host the user never configured). Resolves to { status, retryAfter, raw } or { fail }.
 function once(url, data, key, timeoutMs) {
   return new Promise((resolve) => {
@@ -310,7 +354,9 @@ function once(url, data, key, timeoutMs) {
     try {
       req = (target.protocol === 'https:' ? https : http).request(target, {
         method: 'POST',
-        agent: false,
+        // Plain http is only ever this machine (a test server): never through a proxy, which
+        // would see the key unencrypted.
+        ...(target.protocol === 'http:' ? { agent: false } : {}),
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'first-pass-jev', 'Content-Length': Buffer.byteLength(data) },
       }, (res) => {
         const chunks = [];
@@ -323,7 +369,7 @@ function once(url, data, key, timeoutMs) {
       finish({ fail: error.code === 'ERR_INVALID_CHAR' ? 'bad key' : 'network', code: error.code ?? error.name });
       return;
     }
-    req.on('error', (error) => finish({ fail: 'network', code: error.code ?? error.name }));
+    req.on('error', (error) => finish(req.res ? { fail: 'cut off' } : { fail: 'network', code: error.code ?? error.name }));
     req.end(data);
   });
 }
@@ -333,12 +379,15 @@ function once(url, data, key, timeoutMs) {
 // server supplies is printed (only status and error codes): an echoed key can come back in any
 // encoding, so scrubbing what is printed cannot be relied on. The one exception, the model id, is
 // checked for its shape in `readAnswer` and scrubbed here.
-export async function post(body, { key, url = JEV_URL, timeoutMs = TIMEOUT_MS, backoffMs = 1000 } = {}) {
+export async function post(body, { key, url = JEV_URL, timeoutMs = TIMEOUT_MS, backoffMs = 1000, stopAt = Infinity } = {}) {
   const scrub = (s) => String(s).split(key).join('[key]');
   const data = JSON.stringify(body);
+  const spent = { problem: "the run's time budget ran out" };
   for (let attempt = 0; ; attempt++) {
-    const response = await once(url, data, key, timeoutMs);
-    if (response.fail === 'timeout') return { problem: `no answer within ${timeoutMs / 1000} s` };
+    const limit = Math.min(timeoutMs, stopAt - Date.now());
+    if (limit <= 0) return spent;
+    const response = await once(url, data, key, limit);
+    if (response.fail === 'timeout') return limit < timeoutMs ? spent : { problem: `no answer within ${timeoutMs / 1000} s` };
     if (response.fail === 'bad key') return { problem: 'the key holds a character a request header cannot carry: set it again' };
     if (response.fail === 'cut off') return { problem: 'the answer was cut off' };
     if (response.fail) {
@@ -353,7 +402,7 @@ export async function post(body, { key, url = JEV_URL, timeoutMs = TIMEOUT_MS, b
     const raw = response.raw;
     if (response.status >= 300 && response.status < 400) return { problem: `${url} answered with a redirect, which is not followed` };
     if (response.status === 401) return { problem: 'the key was refused (401)' };
-    if (response.status < 200 || response.status >= 300) return { problem: `HTTP ${response.status}` };
+    if (response.status < 200 || response.status >= 300) return { problem: `HTTP ${response.status}${HINTS[response.status] ? `: ${HINTS[response.status]}` : ''}` };
     try {
       // Every string is scrubbed after it is decoded, so a key echoed in the answer, escaped or
       // not, is never printed.
@@ -368,6 +417,7 @@ export async function post(body, { key, url = JEV_URL, timeoutMs = TIMEOUT_MS, b
 // be sent, get no request.
 export async function judge(kind, findings, judgeOptions) {
   const results = new Array(findings.length);
+  const stopAt = Date.now() + (judgeOptions.budgetMs ?? BUDGET_MS);
   let next = 0;
   async function worker() {
     while (next < findings.length) {
@@ -378,7 +428,7 @@ export async function judge(kind, findings, judgeOptions) {
       else if (skip) results[i] = decide(kind, finding, { problem: skip });
       else if (!judgeOptions.on) results[i] = decide(kind, finding, { problem: judgeOptions.why });
       else {
-        const sent = await post(requestBody(kind, finding, judgeOptions.model), judgeOptions);
+        const sent = await post(requestBody(kind, finding, judgeOptions.model), { ...judgeOptions, stopAt });
         results[i] = decide(kind, finding, sent.problem ? { problem: sent.problem } : readAnswer(kind, sent.response));
       }
     }

@@ -70,10 +70,15 @@ holds it today and where it is known to break.
    git does. Redaction is pattern-based (see 8), so a secret with no telltale shape inside a
    finding's text is sent. The key for a folder is chosen by path and git (`repoHome` in
    `scripts/lib/jev.mjs`); a config with separate accounts has no default key, so a folder no
-   entry names has the judge off. Known gaps: a submodule or a nested clone inside a worktree
-   that sits in a folder named for another account gets that account's key; a worktree's
-   subfolder whose twin in the main checkout is named separately gets the whole repo's key;
-   configured paths are resolved on every call, which waits on an offline network share.
+   entry names has the judge off. Known gaps: a shared clone, or a worktree of a bare repo
+   not named `.git`, has no main checkout git can name, so it is matched by its own path only;
+   a repo made with `--separate-git-dir` into a folder named for one account is placed by that
+   folder even when it sits inside another account's folder; a worktree of a nested clone that
+   sits inside a worktree placed in another account's folder, and a worktree folder git no
+   longer knows (its registration pruned), are placed by their path, so they can get that other
+   account's key (the jev skill says never to name a folder that holds another account's repos); every configured path is resolved
+   (links followed) on every call, which waits on an offline network share; a path that is not
+   an existing folder has the judge off.
 11. **The Jev judge never clears a finding the review named as real harm (nor recommends leaving one on the list), never picks a lighter proof for a real-harm fix or one with no worst case, never follows a redirect, and a failed, unreadable or unsure answer leaves the call to the rules, never to the lighter side.**
    Held by: `settled` and `decide` (with `FLOORS`), and `once` (a redirect is never followed; one deadline covers the whole exchange), in
    `scripts/lib/jev.mjs`; `test/jev.test.mjs`. The rules and ship-check say the agent may still treat any finding as
