@@ -226,7 +226,10 @@ Cursor.
 1. **Plan.** Ask for the change. The agent runs the pre-mortem before it edits. Read the
    "Not handled, because" lines: those are your calls.
 2. **Build**, with the tests the pre-mortem named, each one failing on the old code first.
-3. **Done.** `ship-check` runs the breaker and CI's checks in a clean checkout, then reports
+3. **Done.** `ship-check` runs the breaker and, while it works, CI's checks in a clean
+   checkout, when your repo's test limits allow both at once. Nothing is committed to your
+   branch before the review's result is handled unless you say to ship it as it is, and
+   nothing is called done before it either way. Then it reports
    `Verified: <what was run> → <result>` and what wasn't verified.
 4. **Bug.** `fix-the-class` fixes the one you found, the others like it, and adds the check
    that stops the next one.
@@ -302,8 +305,8 @@ they help on your code.
   with `fix-the-class` and then running `ship-check` used about $29 at API list prices
   (three reviewer passes). The trade is fewer rounds after "done". The pre-mortem scales
   with the change: a copy tweak answers it in one line. To keep the cost down, a prompt with
-  several items builds them all first, then reviews them and runs CI's full checks once at
-  the end. During the work, only serious findings (money, data, something done twice or sent
+  several items builds them all first, then reviews them while CI's full checks run in one
+  clean checkout holding them all (again after any later edit). During the work, only serious findings (money, data, something done twice or sent
   wrong, security, legal, a crash, stuck work, the change not doing its job) are fixed and
   checked again. The smaller ones
   come to you once, as one list at the end, and the ones you pick get one review together.

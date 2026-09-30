@@ -1,4 +1,4 @@
-<!-- first-pass:profile:start v0.5.1 (the default profile, managed by the setup-first-pass skill; put personal changes outside the markers) -->
+<!-- first-pass:profile:start v0.5.2 (the default profile, managed by the setup-first-pass skill; put personal changes outside the markers) -->
 
 ## How the user works (profile)
 

@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.5.1 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.5.2 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -99,11 +99,25 @@ skill has the full procedure.
   item touches. Then one fresh review per item (small items that touch the same code can share
   one), its findings handled as above: started together only where the repo's test limits
   say side-by-side runs are safe (at most three at once), otherwise one after another. A fix
-  that touches code another item uses gets its review on the combined diff. Then
-  CI's full checks once, in one clean checkout holding every item; if they fail, a fix that
+  that touches code another item uses gets its review on the combined diff. Then, while the
+  reviews run, CI's full checks in one clean checkout holding every item (again after any later edit); if they fail, a fix that
   is more than small is reviewed, and the full checks run again. The items' lists of smaller
   findings reach the user together, once. A full suite runs mid-work only when the next item
   depends on its result.
+- **Don't wait on a review.** A review runs in the background, and the work goes on with what
+  reads or runs but does not edit the files under review: CI's checks in the clean checkout,
+  the words, monitoring and invariants checks, and a draft of the report. Edits wait for the
+  review (a fix found meanwhile joins its fixes), so the reviewer never reads a tree that is
+  changing. Only runs the repo's test limits allow beside the review go at the same time, and
+  the reviewer is told which ports, databases and suites the session will use while it runs,
+  so it leaves them alone. Until the review's result is in and handled, every reply says
+  built, not done, and what it waits on; nothing of the change is committed to the user's
+  branch, pushed or merged, unless the user says to ship it as it is (commits in a temp clone
+  made for a review are fine); and either way it is not called done. Any edit CI's clean
+  checkout does not hold (a review-led fix, or one a check led to) reruns CI's checks in a
+  clean checkout holding the final change, sized to the whole change as "Scale it to the change" says, and the
+  words, monitoring and invariants checks for what it changed. The `review` skill waits for
+  its reviewers, as it says.
 - **Scale it to the change.** A change with no logic in it (a comment, a doc, a spelling
   fix that changes no behaviour) needs only the repo's format, lint and build checks, plus
   the words check when people read the text. A change that alters behaviour gets all of it,

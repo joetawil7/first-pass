@@ -19,7 +19,8 @@ the tests that item touches; one clean checkout of the base serves every item's 
 run. Steps 3 and 4 run once for all of them, after the last item is built: one review per
 item (small items that touch the same code can share one), started together only where the
 repo's test limits say side-by-side runs are safe (at most three at once), otherwise one
-after another; then CI's full checks once, in one clean checkout holding every item. The
+after another; and, while they run, CI's full checks in one clean checkout holding
+every item (again after any later edit). The
 report answers each item, and every item's list of smaller findings comes in it, once.
 
 Nothing is pushed, merged, deployed, migrated or published until steps 3 and 4 are finished
@@ -78,6 +79,21 @@ or `breaker` where a repo installed its own; Cursor: `/breaker`) with what the c
 for, the repo, the base ref or file list, and the pre-mortem. It must run in its own
 context. If your tool cannot start one, ask the user to run the breaker in a new chat;
 never review in the context that wrote the code.
+
+Start it in the background and don't wait for it: while it runs, do what reads or runs but
+does not edit the files under review: steps 4 to 7 (CI's checks in the clean checkout,
+monitoring, words, invariants) and a draft of the report. Edits wait for the review (a fix
+found meanwhile joins its fixes), so the reviewer never reads a tree that is changing. Only
+runs the repo's test limits allow beside the review go at the same time: tell the reviewer
+which ports, databases and suites the session will use while it runs, so it leaves them
+alone. Until the review's result is in and handled, every reply says built, not done, and
+what it waits on; nothing of the change is committed to the user's branch, pushed or merged,
+unless the user says to ship it as it is (commits in a temp clone made for a review are
+fine); and either way it is not called done. Any edit CI's clean checkout does not hold (a
+review-led fix, or one a check led to) reruns CI's checks in a clean checkout holding the final
+change, sized to the whole change as step 0 says, and the words, monitoring and invariants checks for what it
+changed. When the result is in, a confirmed finding you list rather than fix that breaks an
+invariant goes into its Known breaks (step 7).
 
 Sort each finding by its worst case, never by the severity the reviewer gave it:
 

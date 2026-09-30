@@ -202,3 +202,27 @@ test('only real harm is fixed during the work, the rest goes on one list, and ev
   assert.match(shipCheck, /carries that harm as its `worst_case`/, 'ship-check carries a found harm into priority and proof');
   assert.match(read('skills/setup-first-pass/assets/rules-block.md'), /real harm it caused or made worse still open is built, not done/, 'only harm the change caused keeps it from done');
 });
+
+test('the work goes on while a review runs, but nothing is committed or called done before its result', () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\s+/g, ' ');
+  for (const file of ['skills/setup-first-pass/assets/rules-block.md', 'skills/ship-check/SKILL.md']) {
+    const text = read(file);
+    assert.match(text, /in the background/, `${file}: a review runs in the background`);
+    assert.match(text, /reads or runs but does not edit the files under review/, `${file}: nothing edits what the reviewer reads`);
+    assert.match(text, /Edits wait for the review/, `${file}: edits wait for the review`);
+    assert.match(text, /Only runs the repo's test limits allow beside the review go at the same time/, `${file}: only runs the test limits allow`);
+    assert.match(text, /which ports, databases and suites the session will use while it runs/, `${file}: the reviewer is told what will be in use`);
+    assert.match(text, /Edits wait for the review \(a fix found meanwhile joins its fixes\), so the reviewer never reads a tree that is changing/, `${file}: edits wait, no exceptions`);
+    assert.match(text, /Until the review's result is in and handled, every reply says built, not done, and what it waits on; nothing of the change is committed to the user's branch, pushed or merged, unless the user says to ship it as it is .{0,70}; and either way it is not called done/, `${file}: shipping as it is never makes unreviewed work "done"`);
+    assert.doesNotMatch(text, /called done,? unless the user says to ship it/, `${file}: "ship it as it is" never covers "done"`);
+    assert.match(text, /Any edit CI's clean checkout does not hold .{0,80}reruns CI's checks in a clean checkout holding the final change, sized to the whole change as .{0,40}says, and the words, monitoring and invariants checks for what it changed/, `${file}: any edit CI has not seen reruns CI and the checks it touches`);
+    assert.match(text, /\(again after any later edit\)/, `${file}: CI's one run is not the last after an edit`);
+    assert.doesNotMatch(text, /while (it|they|the reviews?) runs?[^.]*\b(build|commit)/i, `${file}: nothing is built or committed while a review runs`);
+    assert.doesNotMatch(text, /no need to tell the reviewer|reviewer is not told/i, `${file}: the reviewer is always told what is in use`);
+  }
+  assert.match(read('skills/setup-first-pass/assets/breaker.md'), /ports, databases or suites the author is using meanwhile, leave them alone/);
+  assert.match(read('skills/setup-first-pass/assets/rules-block.md'), /The `review` skill waits for its reviewers, as it says/, 'the rules leave the review skill waiting for its reviewers');
+  assert.match(read('skills/ship-check/SKILL.md'), /a confirmed finding you list rather than fix that breaks an invariant goes into its Known breaks/, 'listed invariant breaks are recorded');
+  assert.doesNotMatch(read('README.md'), /called done[^.]*unless you say to ship it/, 'README never lets shipping as it is make work done');
+});

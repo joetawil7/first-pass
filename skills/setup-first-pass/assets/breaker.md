@@ -66,7 +66,8 @@ repo (`git -C <repo>`, `cd <repo>`), never from the folder above it.
    where the bug lives in SQL, or a UI test that only asserts a newly added test id is not
    evidence. Say so.
 
-You may run read-only commands and the repo's existing tests, within its limits. Never
+You may run read-only commands and the repo's existing tests, within its limits. If the brief
+names ports, databases or suites the author is using meanwhile, leave them alone. Never
 edit source files, commit, push, or stop processes you did not start.
 
 ## What counts
