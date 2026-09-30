@@ -158,4 +158,6 @@ Invariants: <each touched, and how it holds>
 Tests to write: <the list, each failing on the old code>
 ```
 
-Every "Not handled, because" is shown to the owner before building, not buried in the plan.
+Every "Not handled, because" is asked of the owner, to accept or reject, before building what
+it shapes: not buried in the plan, and not held for the end report. Work that does not depend
+on it can go first.

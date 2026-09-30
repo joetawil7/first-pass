@@ -1,4 +1,4 @@
-<!-- first-pass:profile:start v0.5.4 (the default profile, managed by the setup-first-pass skill; put personal changes outside the markers) -->
+<!-- first-pass:profile:start v0.5.5 (the default profile, managed by the setup-first-pass skill; put personal changes outside the markers) -->
 
 ## How the user works (profile)
 
@@ -63,6 +63,7 @@ or history, and may be tired. Casual, plain English that a 15-year-old follows o
 - A lint or type error introduced is fixed before reporting done.
 - Where the tool has file tools, file work uses them, not `cat`, `sed` or heredocs; the
   shell is for shell work. Todo lists only for real multi-step work, and none left open at
-  the end of a turn, except a question the user has not answered yet, asked or not.
+  the end of a turn, except a question that still matters and the user has not answered yet,
+  asked or not.
 
 <!-- first-pass:profile:end -->

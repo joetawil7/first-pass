@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.5.4 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.5.5 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -153,14 +153,18 @@ skill has the full procedure.
   everything still open in one set, each question with the pick you recommend. Work that
   depends on the answer waits for it, never built on a guess. A decision that blocks nothing
   waits for the end report; a pre-mortem's "Not handled, because" lines do not: they are asked
-  before the build they shape. Mid-work, write each open question down in one line when it
-  comes up (in the task list, starting one if there is none), so it survives a compacted
-  context. It never delays a stop: a failed step in a chain of actions (commit, push, merge,
-  deploy, migrate, publish), or being stuck, stops the work and is said at once, as "One step
-  at a time" and "Stuck is not a licence" say. A skill that asks before
-  the work starts, as `sharpen` does, still asks there.
-- **One step at a time.** Chained actions (commit, push, merge, deploy, migrate, publish):
-  check each before the next (a deploy from its logs) and stop at the first failure.
+  before the build they shape. Write each question you hold back in one line when it comes
+  up (in the task list, starting one if there is none), so it survives a compacted context.
+  It never delays a stop: a failed action in a chain (any "One step at a time" names), or
+  being stuck, stops the work and is said at once, as that rule and "Stuck is not a licence"
+  say. A failing test or CI check on the change is not such a stop: it is fixed, or named
+  when the base fails it too. A check that shows a chained action failed (a deploy's logs) is
+  such a stop. A skill that asks before the work starts, as `sharpen` does, still asks there.
+- **One step at a time.** Chained actions (commit, push, merge, deploy, migrate, publish,
+  and any other write outside this machine: a vendor or API write, an email or message
+  sent): check each before the next (a deploy from its logs) and stop at the first failure.
+  A write that failed or timed out may still have happened: say so, and check before any
+  retry; never retry it blind.
 - **Stuck is not a licence.** Never reset, force-push, delete, skip hooks or kill a process
   someone else started to get unstuck. Stop and say so.
 - **Cost before scale.** Before more than 3 agents or a run over about 15 minutes, say what
