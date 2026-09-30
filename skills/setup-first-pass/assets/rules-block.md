@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.5.3 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.5.4 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -152,10 +152,12 @@ skill has the full procedure.
   does not depend on the answer (other items, reads, checks, a draft of the report), then ask
   everything still open in one set, each question with the pick you recommend. Work that
   depends on the answer waits for it, never built on a guess. A decision that blocks nothing
-  waits for the end report. Write each open question down in one line when it comes up (in
-  the task list, starting one if there is none), so it survives a compacted context. It never delays a
-  stop: a failed step in a chain of actions, or being stuck, stops the work and is said at
-  once, as "One step at a time" and "Stuck is not a licence" say. A skill that asks before
+  waits for the end report; a pre-mortem's "Not handled, because" lines do not: they are asked
+  before the build they shape. Mid-work, write each open question down in one line when it
+  comes up (in the task list, starting one if there is none), so it survives a compacted
+  context. It never delays a stop: a failed step in a chain of actions (commit, push, merge,
+  deploy, migrate, publish), or being stuck, stops the work and is said at once, as "One step
+  at a time" and "Stuck is not a licence" say. A skill that asks before
   the work starts, as `sharpen` does, still asks there.
 - **One step at a time.** Chained actions (commit, push, merge, deploy, migrate, publish):
   check each before the next (a deploy from its logs) and stop at the first failure.
