@@ -226,3 +226,22 @@ test('the work goes on while a review runs, but nothing is committed or called d
   assert.match(read('skills/ship-check/SKILL.md'), /a confirmed finding you list rather than fix that breaks an invariant goes into its Known breaks/, 'listed invariant breaks are recorded');
   assert.doesNotMatch(read('README.md'), /called done[^.]*unless you say to ship it/, 'README never lets shipping as it is make work done');
 });
+
+test('a question waits until nothing else can move, and no work is built on a guess at its answer', () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\s+/g, ' ');
+  const rules = read('skills/setup-first-pass/assets/rules-block.md');
+  assert.match(rules, /\*\*Ask when nothing else can move\.\*\* A question stops the session until the user answers/, 'the rule says why a question costs time');
+  assert.match(rules, /Mid-work, first do every part that does not depend on the answer \(other items, reads, checks, a draft of the report\), then ask everything still open in one set, each question with the pick you recommend/, 'independent work first, then one set with recommendations');
+  assert.match(rules, /Work that depends on the answer waits for it, never built on a guess/, 'nothing is built on an answer not given');
+  assert.match(rules, /A decision that blocks nothing waits for the end report/, 'a decision that blocks nothing goes to the end');
+  assert.match(rules, /A skill that asks before the work starts, as `sharpen` does, still asks there/, 'sharpen still stops before it starts');
+  assert.match(rules, /Live money, production deletes and outward-facing actions still need a yes/, 'a yes before money, deletes and outward actions is still needed');
+  assert.match(read('skills/sharpen/SKILL.md'), /start nothing until the user answers/, 'sharpen still starts nothing until its questions are answered');
+  assert.match(read('README.md'), /Questions to you wait until nothing else can move/, 'the README says it');
+  assert.match(rules, /It never delays a stop: a failed step in a chain of actions, or being stuck, stops the work and is said at once, as "One step at a time" and "Stuck is not a licence" say/, 'a failure or being stuck still stops everything at once');
+  assert.match(rules, /Write each open question down in one line when it comes up \(in the task list, starting one if there is none\), so it survives a compacted context/, 'a held-back question is written down, in a list started for it if need be, so a compaction cannot lose it');
+  assert.match(read('README.md'), /Questions to you wait until nothing else can move \(`sharpen` and setup still ask before they start, and a failed commit, push or deploy still stops the work at once\)/, 'the README keeps the exceptions');
+  assert.doesNotMatch(read('README.md'), /a failed step still stops/, 'a failed check is fixed, not a reason to stop');
+  assert.match(read('skills/setup-first-pass/assets/profile-block.md'), /none left open at the end of a turn, except a question still waiting on the user/, 'the profile keeps a waiting question open across turns');
+});

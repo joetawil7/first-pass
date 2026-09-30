@@ -313,6 +313,11 @@ they help on your code.
   Before this, a reviewer finding a small case, a question to you, a fix and another review
   of that fix could chain for hours: in one two-day stretch, about a third of 84 reviews
   found only small points, and most of them still started another round.
+  Questions to you wait until nothing else can move (`sharpen` and setup still ask before
+  they start, and a failed commit, push or deploy still stops the work at once): each one stops the session until you
+  answer, and in three sessions over three days, 17 of 70 sets of questions waited an hour or
+  more. So the agent first does every part that doesn't depend on your answer, then asks
+  what's left in one set.
 - **It won't make code bug free.** The aim is fewer and smaller escapes: no high-severity
   ones, no bug class found twice. This is version 0.5, so that's the design, not a measured
   result yet.

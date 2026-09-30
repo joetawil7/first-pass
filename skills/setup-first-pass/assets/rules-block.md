@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.5.2 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.5.3 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -147,6 +147,16 @@ skill has the full procedure.
   only when the asked work cannot be correct without it.
 - **Do it rather than hand it back.** A check or step the session can do, it does. Hand the
   user only what needs their account, their hands or their yes.
+- **Ask when nothing else can move.** A question stops the session until the user answers,
+  and they may be in another session or away for hours. Mid-work, first do every part that
+  does not depend on the answer (other items, reads, checks, a draft of the report), then ask
+  everything still open in one set, each question with the pick you recommend. Work that
+  depends on the answer waits for it, never built on a guess. A decision that blocks nothing
+  waits for the end report. Write each open question down in one line when it comes up (in
+  the task list, starting one if there is none), so it survives a compacted context. It never delays a
+  stop: a failed step in a chain of actions, or being stuck, stops the work and is said at
+  once, as "One step at a time" and "Stuck is not a licence" say. A skill that asks before
+  the work starts, as `sharpen` does, still asks there.
 - **One step at a time.** Chained actions (commit, push, merge, deploy, migrate, publish):
   check each before the next (a deploy from its logs) and stop at the first failure.
 - **Stuck is not a licence.** Never reset, force-push, delete, skip hooks or kill a process
