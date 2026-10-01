@@ -76,7 +76,8 @@ For each behaviour the change adds or fixes, and each pre-mortem answer of the "
 
 Hand the change to the `breaker` agent (Claude Code: `first-pass:breaker` from the plugin,
 or `breaker` where a repo installed its own; Cursor: `/breaker`) with what the change is
-for, the repo, the base ref or file list, and the pre-mortem. It must run in its own
+for, the repo, the base ref or file list, the pre-mortem, and the task's scope (or that the
+user lifted it with `hulk`). It must run in its own
 context. If your tool cannot start one, ask the user to run the breaker in a new chat;
 never review in the context that wrote the code.
 
@@ -103,13 +104,27 @@ Sort each finding by its worst case, never by the severity the reviewer gave it:
   security hole, a legal breach, a crash, work left stuck: a job that never finishes, or a
   person who can't finish what they started), or it stops the change doing what it was for.
   Fix it with its own failing-first test (step 2), and run the breaker on that fix, again on
-  each new real-harm fix, until one review finds no new real harm.
+  each new real-harm fix, until one review finds no new real harm. From the second review on,
+  real harm whose Who meets it is `unusual` waits instead: collect it, fix it in one batch
+  once the item's other fixes are reviewed (each with its own failing-first test), and give
+  the batch one review. Rare-path harm that review, or any later review of the same item,
+  finds starts no new round: it goes first on the list (step 8) as real harm; nothing of the
+  item ships until the user answers it, and while it stays unfixed the item is built, not
+  done. Harm met in normal use (`everyone`, `feature`) is still fixed as
+  it is found. Write each finding that waits in the batch, or for the user's answer, in the
+  task list when it is found, and say after each review which harm waits, so a compacted
+  context cannot lose it.
 - **Smaller: list it.** Real, but none of the above: words wrong in some state, a button that
   shows when it does nothing, a clumsier path. Don't fix it, and don't ask the user about it
   during the work: put it on the item's list with its worst case and who meets it.
 - **Disagree:** say why in the report, with file:line.
-- **Out of scope** (the change neither caused it nor made it worse): on the list, marked as
-  older than the change, whatever its harm; a real harm among them is named first.
+- **Older** (inside the task's scope, but the change neither caused it nor made it worse): on
+  the list, marked as older than the change, whatever its harm; a real harm among them is
+  named first.
+- **Outside the task's scope** (the rules' "Stay in the task's scope"): not a finding. When
+  it does real harm, one line in the report under "Outside this task" (and a Known breaks line
+  when it breaks an invariant, step 7); otherwise left out. A problem the change caused or
+  made worse is never outside, wherever it lives.
 
 A fix that touches code another item in the same prompt uses gets its review on the combined
 diff. Say after each review what it found and what is left ("item 1: review of the fix found
@@ -131,8 +146,10 @@ TypeSafe). Then `node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" jev ask harm <
 where `<repo>` is the repo's own folder (never the temp clean checkout: the key is chosen by
 it), prints a verdict for each:
 
-- `fix now`: real harm (the review named it, or Jev found it): fix it now, unless it is out
-  of scope, which puts it first on the list. Jev can make a finding real harm; it never
+- `fix now`: real harm (the review named it, or Jev found it): handle it as real harm above says
+  (at once; in the batch when its Who meets it is `unusual` and a later review found it; or
+  first on the list when the batch's review or a later one found it), unless it is older
+  than the change, which also puts it first on the list. Jev can make a finding real harm; it never
   clears one the review named, and you may still treat any finding as real harm yourself,
   never the reverse.
 - `list`: smaller; it goes on the list.
@@ -191,7 +208,8 @@ review.
 <What changed, one plain line: what the user can now do or will notice>
 Verified: <what was run and how much of it, said plainly> → <result>, one line each (the test that failed before and passes now, with pass and fail counts; CI's checks)
 Fresh review: <what the second reviewer found: n fixed, n disputed, n on the list>
-To pick: <the list of smaller and older findings, numbered, each with its worst case and who meets it>
+To pick: <real harm left for the user's answer first, then the smaller and older findings, numbered, each with its worst case and who meets it>
+Outside this task: <real harm seen in passing outside the scope, one line each with file:line>
 Not verified: <each thing, and why>
 Not handled, because: <each, from the pre-mortem>
 Not built: <each guess left out, one line each>

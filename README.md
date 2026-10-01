@@ -19,14 +19,23 @@ only). You set it up once, in the folder that holds your repos.
   nothing requires it, and lists it under "Not built" so you can ask for it. During the
   work, a review finding gets fixed only when it does real harm or stops the change doing its
   job; the rest come to you as one list at the end, to pick from.
+- **On the task you gave,** the agent first writes the task's scope from your prompt and the
+  code around it: the feature, everything that uses the same data, the rest of the same
+  flow, and the steps that cancel or delete what it creates. Its searches and reviews stay
+  inside that scope. A serious problem it happens to see
+  elsewhere gets one line in the report (and one in that repo's list of known breaks when it
+  breaks one of its rules), and nothing else; anything the change itself breaks
+  counts as inside, wherever it is. `/first-pass:hulk` lifts the
+  scope for one task, so it looks everywhere.
 - **Before "done",** a second agent that didn't write the code reviews it in a fresh
   context. "Done" needs a test that failed before the change and CI's checks passing in a
   clean checkout; anything less is reported as built, not done.
-- **On a bug,** it fixes the whole class: it reproduces the bug, finds the same pattern
-  elsewhere, and adds the check that stops it coming back.
+- **On a bug,** it fixes the whole class: it reproduces the bug, finds the same pattern in
+  the task's scope, and adds the check that stops it coming back.
 - **On a pull request,** `/first-pass:review` checks your own branch before you ask for
   review, or a teammate's PRs across several repos. Every finding comes with its proof or
-  is marked unproven, and it never posts to GitHub.
+  is marked unproven, and it never posts to GitHub. `/first-pass:review hulk <what>` reviews
+  with the scope lifted, so it looks everywhere.
 - **In every session,** hooks send back a "done" that has no evidence behind it (edits made
   through the shell count too), run each repo's own hooks from the shared folder, and say
   what drifted since setup.
@@ -95,7 +104,9 @@ first-pass names those checks, and asks for proof before anything is called done
   code paths that touch the same data.
 - **"Done" means a test that failed before the change**, the breaker's review, and CI's own
   checks passing in a clean checkout. Short of that, it's reported as built, not done.
-- **Bugs get fixed as a class**: reproduce, find the same pattern elsewhere, and add the
+- **Bugs get fixed as a class**: reproduce, find the same pattern in the task's scope (the
+  whole codebase when your own prompt asks for that fix, not when you pick it from a task's
+  list), and add the
   helper, constraint or check that stops it coming back.
 
 ## What's in it
@@ -105,12 +116,13 @@ first-pass names those checks, and asks for proof before anything is called done
 | `premortem` | The ten questions, answered against the code | Before code |
 | `breaker` (agent) | Fresh-context review of the diff and of every other path touching the same data; concrete findings only | Before done |
 | `ship-check` | The definition of done, ending in a report where every "Verified" line says what was run and its result | Before done |
-| `fix-the-class` | Reproduce, name the class, search for it everywhere, run the ten questions on the fix, fix or record each hit, make it hard to repeat | On any bug |
+| `fix-the-class` | Reproduce, name the class, search for it in the task's scope (everywhere when your own prompt asks for that fix, not when you pick it from a task's list), run the ten questions on the fix, fix or record each hit, make it hard to repeat | On any bug |
 | `setup-first-pass` | Writes the rules once, a map of your repos, and a section per repo with its real commands, test limits and a drafted `INVARIANTS.md` | Once, then to update |
 | `habit-words` | Reads what you typed in your recent sessions and maps words like "be 100% sure" to the checks they should mean | At setup, then when due |
 | `sharpen` | Rewrites the prompt you type after it: numbered asks, habit words turned into checks, names and numbers kept exactly. Shows you the rewrite, then works from it | Only when you type it |
 | `review` | Reviews your own branch before you ask for review (type nothing after it), or a teammate's PRs, several repos at once. Checks the change against its ticket, judges the failed checks and every Bugbot comment, runs the breaker, traces the other code that uses what changed, proves each finding or marks it unproven, and says what the merge needs and how to check the deploy. Reads GitHub and never posts; pushes a fix only on your yes | Only when you type it |
 | `jev` | Sets up the optional Jev judge (TypeSafe's decision model), which `ship-check` asks whether a review finding is real harm, which small ones to fix now, and what proof a small fix needs | Only when you type it |
+| `hulk` | Lifts the task's scope for one task: searches, reviews and bug hunts go across the whole codebase, and problems found anywhere are handled as usual (for a pull request: `/first-pass:review hulk <what>`) | Only when you type it |
 | Hooks | Run each repo's own hooks from the main folder, send back a "done" with no evidence, say what drifted at session start, and hold `sharpen`'s work until its rewrite is shown | Every session |
 
 ## If you keep all your repos in one folder
@@ -292,7 +304,8 @@ output blind.
   of 20, rated it clearer (3.3 vs 3.0 out of 5) and got lost on fewer phrases (150 vs 175).
   The catch: 7 times it held back something that mattered, so the rule now says never to
   hold back a risk, a failure or a decision that's yours.
-- **The reviewer still reports everything.** In 3 runs on a small change with 8 planted
+- **The reviewer still reports every bug in the change** (measured before 0.6's scope
+  rule). In 3 runs on a small change with 8 planted
   bugs, all 8 were in every review and in every final reply.
 
 These are small samples on small tasks. They show the rules do what they say, not how much
@@ -308,7 +321,10 @@ they help on your code.
   several items builds them all first, then reviews them while CI's full checks run in one
   clean checkout holding them all (again after any later edit). During the work, only serious findings (money, data, something done twice or sent
   wrong, security, legal, a crash, stuck work, the change not doing its job) are fixed and
-  checked again. The smaller ones
+  checked again; those only a rare path reaches, found after the first review, are collected
+  and fixed together in one batch with one review, and a rare one that batch's review or a later
+  review of the same change finds comes to you first on the list instead of starting another
+  round; nothing ships until you answer, and the change stays not done while it's unfixed. The smaller ones
   come to you once, as one list at the end, and the ones you pick get one review together.
   Before this, a reviewer finding a small case, a question to you, a fix and another review
   of that fix could chain for hours: in one two-day stretch, about a third of 84 reviews
@@ -319,7 +335,7 @@ they help on your code.
   more. So the agent first does every part that doesn't depend on your answer, then asks
   what's left in one set.
 - **It won't make code bug free.** The aim is fewer and smaller escapes: no high-severity
-  ones, no bug class found twice. This is version 0.5, so that's the design, not a measured
+  ones, no bug class found twice. This is version 0.6, so that's the design, not a measured
   result yet.
 - **Rules alone fade.** The fixes that last are the ones `fix-the-class` pushes toward: a
   shared helper that's the only way to do a thing, a database constraint, a CI check.

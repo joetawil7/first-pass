@@ -26,6 +26,37 @@ answer is one of three things, and nothing else counts:
 
 ## 0. Map what the change touches
 
+First the task's scope (the rules' "Stay in the task's scope"). A change with no logic in it
+(a comment, a doc, a spelling fix: no behaviour changes and no label's meaning changes; when
+unsure, it is not one) writes one line, `Scope: <the file or text>, no
+behaviour change`, and goes on. Anything else draws it from the code, not from the prompt's
+words alone:
+
+1. Name the goal and the feature or flow it is about, in the user's words.
+2. Find where that feature lives: search the repo for the user's words and the feature's own
+   names (pages, routes, jobs, workers, modules), and read the entry files.
+3. From them, list the data they read and write (tables and fields, queues, events, vendor
+   calls) and the shared code they call.
+4. Add what reads or writes the same data or calls the same code (step 5's neighbors), the
+   feature's other paths (by hand and on a schedule, one at a time and in bulk), the steps of
+   the ending paths that handle what it creates or uses (every ending in step 6: cancel,
+   refund, delete, disconnect, reconnect, expire, downgrade, a plan lapsed, a trial ending,
+   replace, and the deletion of the whole account), every pair the repo's
+   section lists as the same job in two places that the change touches or whose job it does,
+   and the sentences that describe it (step 9).
+5. Write it: `Scope: <goal>. Inside: <features, flows and modules, by name>. Endings: <the
+   steps of each step-6 ending (account deletion included) that handle what it creates or
+   uses, or "none, because ___">. Outside: <the nearest features left out, by name, each
+   with why the goal still holds without it>.` Naming the endings and the nearest ones left
+   out makes each border a decision, not an accident: one whose "why" fails goes inside.
+6. Draw it again when the work finds something new it depends on (a table, a job, another
+   caller): the scope grows because the work cannot be correct without it; say so in one line.
+
+The map and the searches below stay inside it. Inside it by definition: the neighbors in
+step 5, the steps of the ending paths in step 6 that handle what the change creates or uses,
+the same job done in two places, the sentences in step 9, and any problem the change caused
+or made worse.
+
 List every field or column, status value, option key, queue or topic, cron, event, endpoint,
 DTO property and outside service the change reads or writes. This list drives questions 1 to 10.
 
@@ -143,6 +174,7 @@ Put this in the plan, before the first edit:
 
 ```
 Pre-mortem: <change>
+Scope: <goal>. Inside: <features, flows and modules>. Endings: <the step-6 ending steps that handle what it creates or uses, or "none, because ___">. Outside: <nearest left out, each with why the goal holds without it>. (Or "lifted (hulk)".)
 Touches: <the map from step 0>
 1 Twice: <file:line | test | Not handled, because ...>
 2 Halfway: ...

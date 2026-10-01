@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.5.5 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.6.0 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -56,7 +56,8 @@ to accept. Never skip one silently. A repo's section can add its own cases.
 5. **Neighbors.** Every other reader and writer of each field, status, option, queue, event
    and endpoint touched, in this repo and in the repos that use it: list them, then handle
    or explain each.
-6. **Endings.** Cancel, delete, disconnect, reconnect, expire, downgrade, plan lapsed.
+6. **Endings.** Cancel, delete, disconnect, reconnect, expire, downgrade, plan lapsed,
+   trial end, replace.
 7. **Money.** Who pays, what caps it in the database, what refunds it, can the refund run
    twice, does the price cover the cost?
 8. **Hostile user.** Auth and size checked before reading input? Can a cap be beaten by
@@ -81,7 +82,14 @@ skill has the full procedure.
   wrong or sent without the yes it needs, a security hole, a legal breach, a crash, work left
   stuck), whatever severity it was given, or stops the change doing what it was for; so is a
   CI failure the change caused. Each such fix gets a review of that fix, repeated until one
-  finds no new real harm in it. Every other finding (smaller ones, and those the change
+  finds no new real harm in it. From the second review on, real harm only an unusual path
+  meets (a rare order of steps, a race, an error at the wrong moment: the reviewer's
+  "unusual") is collected instead, written in the task list when it is found so a compacted
+  context cannot lose it, and fixed in one batch once the item's other fixes are
+  reviewed, each with its own failing-first test; the batch gets one review. Rare-path harm
+  that review, or any later review of the same item, finds starts no new round: it is
+  written in the task list and goes first on the end list as real harm; nothing of the item
+  ships until the user answers it, and while it stays unfixed the item is built, not done. Harm met in normal use is still fixed as it is found. Every other finding (smaller ones, and those the change
   neither caused nor made worse) goes on one list per item and is neither fixed nor asked
   about during the work: the user gets the list once, at the end, and the fixes they pick get
   one review together. When the user has set up the Jev judge, `ship-check` asks it too: it
@@ -124,7 +132,7 @@ skill has the full procedure.
   however small (a constant, a condition, a default, a price, a label whose meaning
   changes). When unsure, it is not a typo.
 - **Bugs: reproduce first.** A failing test or log evidence, then the root cause, then the
-  fix, then a search for the same pattern elsewhere. A retry, a sleep or a bigger timeout is
+  fix, then a search for the same pattern in the task's scope. A retry, a sleep or a bigger timeout is
   not a fix until the cause is known. The `fix-the-class` skill has the procedure.
 - **Green by fixing the code, not the test.** Never loosen an assertion, change an expected
   value, skip a test or special-case test inputs to get green. If the test is wrong, say so
@@ -139,6 +147,34 @@ skill has the full procedure.
 
 ### Scope, steps and cost
 
+- **Stay in the task's scope.** Before the first edit, or the first finding in a review or
+  an audit, draw the task's scope as the `premortem` skill's step 0 says, and write it in a
+  few lines, in the plan and in the task list so it survives a compacted context: what the
+  prompt targets and, after reading the files around it, what that covers and the nearest
+  things outside it. Inside: the code the change
+  touches; everything that reads or writes the same data or calls the same code (the
+  pre-mortem's neighbors, wherever they live); the rest of the same feature's flow (for a
+  change to video rendering: the scheduled jobs that render videos too); the steps that
+  handle what it creates or uses in the paths that end it (every ending the pre-mortem's
+  question 6 names, the account's deletion included); every pair the repo's section lists as the same
+  job in two places, when the change touches either side or does that job; every sentence
+  that describes it; and any problem the
+  change caused or made worse, wherever it lives. Outside: other features, and the other
+  steps of shared paths, even in the same files or modules (for that change: the schedule's
+  calendar settings, or the account deletion's other cleanup steps). A prompt that names the
+  whole app or codebase has that as its scope, and a review's scope is the change it reviews;
+  words like "check everything" or "cover all cases" ask for full checks inside the scope,
+  never a wider one. Reads, searches, reviews and `fix-the-class`'s search stay inside (except
+  that a bug fix the user's own prompt asks for searches the whole codebase for its pattern,
+  as `fix-the-class` says): other files are opened only where the scope reaches into them,
+  and only that part. A problem
+  outside is neither fixed, chased nor offered as a next step; one seen in passing that does
+  real harm gets one line in the report, marked "outside this task" (and a Known breaks line
+  in that repo's `INVARIANTS.md` when it breaks one), and the rest are left alone: neither
+  "Extra work is proposed" nor the report's "anything now inaccurate that was noticed"
+  reaches outside the scope. A fix the user picks from the task's end list keeps this scope. The scope grows only
+  when the user says so, or when the asked work cannot be correct without it (say so in one
+  line). The `hulk` skill, typed by the user, lifts the scope for one task.
 - **Say the coverage.** Reviews, audits and research state up front what will be read
   whole, what sampled and what not covered, and repeat it in the report.
 - **Answer every part.** A request with several parts gets each part answered or marked

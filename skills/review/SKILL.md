@@ -2,7 +2,7 @@
 name: review
 description: Reviews a change before it is merged, from little or no input. With nothing typed it reviews the branch you are on, uncommitted work included, against its base, its PR and its ticket, so a developer can check their own work before asking for review. With PR links, repo#N or a branch it reviews someone else's change the same way, several repos at once. It judges the failed CI checks and every Bugbot and reviewer comment, gets a fresh breaker review, traces every other piece of code that uses what changed, proves each finding or marks it unproven, says what the merge needs (a build, env vars, migrations, deploy order) and how to check the deploy, never posts to GitHub, and offers fixes only after the report. Runs only when the user types it.
 disable-model-invocation: true
-argument-hint: <PR links, repo#N, a branch, or what to review>
+argument-hint: <PR links, repo#N, a branch, or what to review; start with "hulk" to look everywhere>
 allowed-tools: Read Grep Glob
 ---
 
@@ -96,6 +96,12 @@ below, where a wrong guess is easy to correct.
   emails?") is answered in the report.
 - **Focus and skip:** "focus on the migration", "skip AI checks", "checks only" (steps 2
   and 3, then step 6 with the header, Checks and Comments only, then step 7).
+- **Scope:** the change under review, as the rules' "Stay in the task's scope" draws it: its
+  code, every reader and writer of what it touches, its endings and its words. A request
+  that starts with `hulk` (`/first-pass:review hulk #123`), or a task the user lifted with
+  `/first-pass:hulk`, lifts it: the reviewers look across the whole codebase and every repo
+  that shares its code, data or vendors, and every problem they find is a finding or goes
+  under "Found nearby".
 
 Then show this as your first text, before step 2, in place of any "setting up" line (reading
 to fill it in may come first). It also opens the report in step 6, so the user sees how the
@@ -107,6 +113,7 @@ Base: <branch and sha; for a sub-branch, the parent and which commits are its ow
 Against: <ticket or plan, or "nothing found: the PR descriptions are the only spec">
 Live today: <as given or read, or "not given: reach is marked unknown">
 Related repos: <each, and the ref it is read at>
+Scope: <the change under review | lifted (hulk)>
 Runs its code: <yes | no, reading only: fork or outside author>
 Read whole: <...> · Sampled: <...> · Not covered: <...>
 ```
@@ -229,8 +236,8 @@ step 8.
   (one after another where they forbid runs side by side). Give it: what the change is for (title, description,
   ticket), the repo and its temp clone's path, the base and head shas, the description's
   claims as the author's pre-mortem to check, the other PRs of the same change, what is live
-  today, the related repos' temp clone paths to read neighbors in, and whether it may run
-  the change's code. Ask it to add, after its findings, a Coverage section that is not
+  today, the related repos' temp clone paths to read neighbors in, whether it may run the
+  change's code, and the scope from step 1 (or that it is lifted). Ask it to add, after its findings, a Coverage section that is not
   counted as findings: each of the ten questions as its finding, "held" with the file:line
   that handles it, or "not relevant", and every other reader and writer it traced for each
   changed field, route, event, table and job, with its file:line. Wait for every breaker to
@@ -278,8 +285,9 @@ PLAUSIBLE at best.
 
 Mark each finding's reach: **today** (users can hit it now), **when <flag, feature or path>**,
 or **unknown**. A bug on a path nobody can reach yet is still a finding, ranked below one
-that fires today. A bug the change did not cause (it happens on the base too) goes under
-"Found nearby", with the same proof.
+that fires today. A bug inside the scope the change did not cause (it happens on the base
+too) goes under "Found nearby", with the same proof; real harm the reviewers saw outside the
+scope goes under "Outside this task", one line each.
 
 Then check the running CI checks again (`gh pr checks <N> --json name,state,link`; without
 `--json` it exits 1 whenever a check has failed, which is not a failed read).
@@ -299,7 +307,8 @@ After the deploy, check: <per environment, the log line, query or screen that sh
 Checks: <state; each failure: cause, this change or pre-existing, how often it fails on the base; any still running>
 Comments: <read of total: line, conversation, review; each: right or wrong, and the proof>
 Spec: <each criterion: met (where) / not met / not in these PRs>
-Found nearby: <bugs the change did not cause, each with its proof>
+Found nearby: <bugs inside the scope the change did not cause, each with its proof>
+Outside this task: <real harm seen outside the scope, one line each with file:line, or "none"; left out when the scope is lifted>
 Coverage: <the ten questions: finding, held at file:line, or not relevant · neighbors traced per changed field, route, event, table or job, and any not read · related repos and the ref read>
 Unproven: <each, and what would settle it>
 Not checked: <each, and why>

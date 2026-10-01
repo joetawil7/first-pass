@@ -1,6 +1,6 @@
 ---
 name: fix-the-class
-description: Bug-fix routine that fixes the whole class of bug, not just the reported instance. Use for any bug report, failing production behaviour, monitoring alert, audit finding or review finding that does real harm (a smaller review finding goes on the item's list, as ship-check says), and whenever the same kind of bug has been seen before. Reproduces it with a failing test, names the failure class, searches the codebase for the same pattern, fixes or records every hit, and adds the rule, invariant, helper or check that stops it coming back.
+description: Bug-fix routine that fixes the whole class of bug, not just the reported instance. Use for any bug report, failing production behaviour, monitoring alert, audit finding or review finding that does real harm (a smaller review finding goes on the item's list, as ship-check says), and whenever the same kind of bug has been seen before. Reproduces it with a failing test, names the failure class, searches the task's scope for the same pattern (the whole codebase when the user's own prompt asks for the fix, not when it is picked from a task's list), fixes or records every hit, and adds the rule, invariant, helper or check that stops it coming back.
 ---
 
 # fix-the-class
@@ -32,10 +32,14 @@ State the pattern in one sentence that can be searched for, for example:
 
 ## 3. Search for the pattern
 
-Search the whole codebase for other instances: the repo, and in a main folder every repo
-the workspace section says shares the code, data or vendor (the same bug is often copied
-between a web app and a mobile app, or between two services calling one vendor). Examples
-by class:
+Search the task's scope for other instances (the rules' "Stay in the task's scope"): the
+code it covers, everything that reads or writes the same data, and in a main folder every
+repo the workspace section says shares that code, data or vendor (the same bug is often
+copied between a web app and a mobile app, or between two services calling one vendor).
+When the user's own prompt asks for this bug's fix, or the user lifted the scope with
+`hulk`, the scope is the whole codebase: the repo and every repo that shares its code, data
+or vendor. A fix the user picks from a task's end list is not such a prompt: it keeps that
+task's scope. Examples by class:
 
 - **Twice**: read-then-write on the same row (`find` then `update` without a lock or
   conditional `WHERE`), counts compared to limits before inserting.
@@ -70,12 +74,14 @@ count.
 ## 5. Fix or record every hit
 
 - Same bug and in scope: fix it, each with a failing-first test.
-- Same bug but out of scope: add it to `INVARIANTS.md` Known breaks (or the team's issue
-  tracker) with file:line.
+- Same bug outside the task's scope (seen in passing, never searched for): when it does real
+  harm, one line in the report marked "outside this task", with file:line, and a Known breaks
+  line in that repo's `INVARIANTS.md` when it breaks one; nothing else is edited for it.
 
 ## 6. Make it hard to do again
 
-Pick the strongest prevention that fits, and propose or build it:
+Pick the strongest prevention that fits inside the task's scope, and propose or build it
+(one that would reach outside the scope is proposed in one line, not built):
 
 1. **A shared helper that is the only way to do the thing** (one vendor-call function that
    always sets a timeout and an idempotency key; one refund function keyed by the charge;

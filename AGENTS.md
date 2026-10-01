@@ -21,11 +21,13 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   report. The `jev` skill, typed by hand, sets up the optional Jev judge (`scripts/lib/jev.mjs`,
   `cli.mjs jev`), the plugin's only network call: `ship-check` asks TypeSafe's model about
   review findings, and code, not the model, holds the policy (it can add harm, never clear
-  it; a failed or unsure answer leaves the call to the rules).
+  it; a failed or unsure answer leaves the call to the rules). The `hulk` skill, typed by
+  hand, lifts the rules' "Stay in the task's scope" for one task, so reviews and
+  `fix-the-class` look across the whole codebase again.
 - **CI's checks** (`.github/workflows/validate.yml`, job `validate`): `claude plugin validate
   --strict .` and on `.claude-plugin/plugin.json` (Claude Code pinned to 2.1.280), skill names
   match folders, the skills the rules name (`premortem`, `ship-check`, `fix-the-class`,
-  `setup-first-pass`, `habit-words`, `sharpen`, `review`, `jev`) and the breaker asset exist, every
+  `setup-first-pass`, `habit-words`, `sharpen`, `review`, `jev`, `hulk`) and the breaker asset exist, every
   block has one start and one end marker, the rules, profile and words block versions equal
   `plugin.json`'s, the hooks point at scripts that exist, `node --test test/*.test.mjs`, and
   the private-name check.
