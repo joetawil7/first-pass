@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.6.0 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.6.1 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -108,8 +108,9 @@ skill has the full procedure.
   one), its findings handled as above: started together only where the repo's test limits
   say side-by-side runs are safe (at most three at once), otherwise one after another. A fix
   that touches code another item uses gets its review on the combined diff. Then, while the
-  reviews run, CI's full checks in one clean checkout holding every item (again after any later edit); if they fail, a fix that
-  is more than small is reviewed, and the full checks run again. The items' lists of smaller
+  reviews run, CI's full checks in one clean checkout holding every item; if they fail, a fix
+  that is more than small is reviewed. A later edit reruns only the checks it can affect, and
+  the full checks run once more on the final change, as "Don't wait on a review" says. The items' lists of smaller
   findings reach the user together, once. A full suite runs mid-work only when the next item
   depends on its result.
 - **Don't wait on a review.** A review runs in the background, and the work goes on with what
@@ -122,10 +123,25 @@ skill has the full procedure.
   built, not done, and what it waits on; nothing of the change is committed to the user's
   branch, pushed or merged, unless the user says to ship it as it is (commits in a temp clone
   made for a review are fine); and either way it is not called done. Any edit CI's clean
-  checkout does not hold (a review-led fix, or one a check led to) reruns CI's checks in a
-  clean checkout holding the final change, sized to the whole change as "Scale it to the change" says, and the
-  words, monitoring and invariants checks for what it changed. The `review` skill waits for
-  its reviewers, as it says.
+  checkout does not hold (a review-led fix, a fix the user picked, or one a check led to) is
+  copied into it once any run there has finished or been stopped, and reruns only the checks
+  it can affect: the tests of the files it changed, the unit, integration and end-to-end
+  (browser) test files that reach them (directly or through their callers), the part that failed when a check led to
+  it, and the format, lint, type and build checks of the packages it touched. A part it
+  reaches through shared code runs whole only when the edit changes what that other code
+  sees (a shared package's exports, a migration, a config value, a route's or event's shape).
+  A run that selects no tests is not a pass: fix the selection, or run that part whole. The
+  words, monitoring and invariants checks run for what it changed. CI's full checks run once
+  more, in the clean checkout holding the final change, unless every part of them has already
+  run whole, from start to end, after the final change was copied in, once no review or fix is pending and nothing is left for the user to pick or
+  answer, the user picks nothing more from a list, or the user asks to call it done, commit,
+  push or ship; a report that ends with
+  a list or a question goes out with them still to run, and says how long they take. Nothing is called done before they pass (failures the base has too are named), and
+  nothing is committed, pushed or shipped before them unless the user says to ship it as it
+  is; a later edit with no logic in it needs only what "Scale it to the change" says. Until
+  they pass, write "full checks still to run" in the task list, and every report says built,
+  not done, and which checks ran on the latest edit. The `review` skill waits for its
+  reviewers, as it says.
 - **Scale it to the change.** A change with no logic in it (a comment, a doc, a spelling
   fix that changes no behaviour) needs only the repo's format, lint and build checks, plus
   the words check when people read the text. A change that alters behaviour gets all of it,

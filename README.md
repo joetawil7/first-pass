@@ -319,7 +319,9 @@ they help on your code.
   (three reviewer passes). The trade is fewer rounds after "done". The pre-mortem scales
   with the change: a copy tweak answers it in one line. To keep the cost down, a prompt with
   several items builds them all first, then reviews them while CI's full checks run in one
-  clean checkout holding them all (again after any later edit). During the work, only serious findings (money, data, something done twice or sent
+  clean checkout holding them all. A later fix reruns only the checks it can affect, and the
+  full checks run once more on the final change: nothing is committed before them unless you
+  say to ship it as it is, and nothing is called done before they pass. During the work, only serious findings (money, data, something done twice or sent
   wrong, security, legal, a crash, stuck work, the change not doing its job) are fixed and
   checked again; those only a rare path reaches, found after the first review, are collected
   and fixed together in one batch with one review, and a rare one that batch's review or a later

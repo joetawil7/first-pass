@@ -20,7 +20,8 @@ run. Steps 3 and 4 run once for all of them, after the last item is built: one r
 item (small items that touch the same code can share one), started together only where the
 repo's test limits say side-by-side runs are safe (at most three at once), otherwise one
 after another; and, while they run, CI's full checks in one clean checkout holding
-every item (again after any later edit). The
+every item. A later edit reruns only the checks it can affect, and the full checks run once
+more on the final change (step 3). The
 report answers each item, and every item's list of smaller findings comes in it, once.
 
 Nothing is pushed, merged, deployed, migrated or published until steps 3 and 4 are finished
@@ -91,9 +92,25 @@ alone. Until the review's result is in and handled, every reply says built, not 
 what it waits on; nothing of the change is committed to the user's branch, pushed or merged,
 unless the user says to ship it as it is (commits in a temp clone made for a review are
 fine); and either way it is not called done. Any edit CI's clean checkout does not hold (a
-review-led fix, or one a check led to) reruns CI's checks in a clean checkout holding the final
-change, sized to the whole change as step 0 says, and the words, monitoring and invariants checks for what it
-changed. When the result is in, a confirmed finding you list rather than fix that breaks an
+review-led fix, a fix the user picked, or one a check led to) is copied into it once any run
+there has finished or been stopped, and reruns only the checks it can affect: the tests of
+the files it changed, the unit, integration and end-to-end (browser) test files that reach
+them (directly or through their callers), the part that failed when a check led to it, and the format, lint,
+type and build checks of the packages it touched. A part it reaches through shared code runs
+whole only when the edit changes what that other code sees (a shared package's exports, a
+migration, a config value, a route's or event's shape). A run that selects no tests is not a
+pass: fix the selection, or run that part whole. The words, monitoring and invariants checks
+run for what it changed. CI's full checks (step 4) run once more, in the clean checkout
+holding the final change, unless every part of them has already run whole, from start to
+end, after the final change was copied in, once no review or fix is pending and nothing is left for the user to pick or answer, the user picks nothing
+more from a list, or the user asks to call it done, commit, push or ship; a report that ends with a list or a question (step 8)
+goes out with them still to run, and says how long they take. Nothing is called
+done before they pass (failures the base has too are named), and nothing is committed,
+pushed or shipped before them unless the user says to ship it as it is; a later edit with no
+logic in it needs only what step 0 says. Until they pass, write "full checks still to run"
+in the task list, and every report says built, not done, and which checks ran on the latest
+edit. When
+the result is in, a confirmed finding you list rather than fix that breaks an
 invariant goes into its Known breaks (step 7).
 
 Sort each finding by its worst case, never by the severity the reviewer gave it:
@@ -176,8 +193,11 @@ deletion or auth). Follow the project's rules for heavy runs.
 
 A failure that also happens on the base without the change is pre-existing: name the test
 and move on. A failure the change caused gets a fix; a fix that is more than small goes
-back to step 3, reviewed like a fix for real harm, and the full checks run again. Then remove the worktree (`git -C <repo> worktree remove --force <path>`) and any leftovers,
-including copied env files.
+back to step 3, reviewed like a fix for real harm. The fix reruns the part that failed and
+the checks it can affect, and the full checks run once more on the final change, as step 3
+says. Keep the worktree until those final full checks pass; then remove it
+(`git -C <repo> worktree remove --force <path>`) and any leftovers, including copied env
+files.
 
 ## 5. Monitoring
 
@@ -207,6 +227,7 @@ review.
 ```
 <What changed, one plain line: what the user can now do or will notice>
 Verified: <what was run and how much of it, said plainly> → <result>, one line each (the test that failed before and passes now, with pass and fail counts; CI's checks)
+Full checks on the final change: <passed, with counts (failures the base has too named) | still to run: which checks ran on the latest edit, and how long the full checks take>
 Fresh review: <what the second reviewer found: n fixed, n disputed, n on the list>
 To pick: <real harm left for the user's answer first, then the smaller and older findings, numbered, each with its worst case and who meets it>
 Outside this task: <real harm seen in passing outside the scope, one line each with file:line>
