@@ -60,7 +60,9 @@ holds it today and where it is known to break.
 10. **The plugin's own scripts make no network call (the README promises it), except the Jev judge once the user has set it up: it sends only to the configured https endpoint (or this machine), only the findings asked about with secrets, emails and phone numbers blanked, and never prints the key.**
    Held by: `shellRoots` in `scripts/lib/shell-edits.mjs`, which only looks up paths inside the
    main folder and never a `//host` or `\\host` one (on Windows, looking one up contacts that
-   host); the `shellRoots` test in `test/lib.test.mjs` fails if one is looked up. For the
+   host); the `shellRoots` test in `test/lib.test.mjs` fails if one is looked up. The parts
+   runner's server probe only takes a url on this machine (`LOCAL_URL` in `scripts/lib/parts.mjs`,
+   tested in `test/parts.test.mjs`); the commands a recipe runs are the repo's own, as its tests are. For the
    judge: `judgeFor`, `checkUrl`, `stateFor` (through `redact`), `keyFor` (the key trimmed
    where it is read) and `post` (no text the server or the network layer supplies is printed, only status
    and error codes, and a model id of a fixed shape, scrubbed) in `scripts/lib/jev.mjs`;
@@ -86,3 +88,26 @@ holds it today and where it is known to break.
    Known breaks: a finding the review labelled small that is really harm stays small unless
    Jev or the agent sees the harm; Jev leaning toward "small" (as seen in a trial) does not
    clear it, but it does not catch it either.
+12. **The parts runner only ever stops processes it started (by their own pid, with everything they started), only takes a port that nothing answers on and no live run holds, never writes over a file it did not create, never prints a value it reads from an env file, and never calls a part passed unless every step ran, exited 0 and, where the recipe says what a run prints, printed it, and no part it needs was run again while it ran; a part that needs another refuses while that one has not passed on the same checkout with the same inputs.**
+   Held by: `stopTree` (Windows: `taskkill /T` only while the root still runs; elsewhere its
+   own process group), `takePort`, `portFree`, `lock`, `claimRun`, `readEnvFile`, `notReady`,
+   `writeMark` and `Runner.runPart` in `scripts/lib/parts.mjs`; the recipe is read from the repo's
+   own folder, never the checkout under test (`loadRecipe`); `test/parts.test.mjs`.
+   A part run through a `partWrapper` passed only when that run wrote its mark (`runWrapped`);
+   a stopped run asks its wrapped runs to stop through a file, so they clean up (`stopAll`); a
+   part killed before its cleanup is cleaned up by the next run of it (`recover`).
+   On Linux and macOS its folder in the temp folder is this user's alone, or it is refused
+   (`partsRoot`), and a leftover record gives recovery only a port (`recover`).
+   Known breaks: a runner killed outright (SIGKILL, or `taskkill /F` of the runner itself) leaves
+   what it started running on every system, its server and its running step (with a
+   `partWrapper`, the wrapper's own cap kills them), and cleans nothing up until the next run of
+   that part (accepted 2026-10-08 for Linux and macOS); the next run picks another port. On Windows, what a step or server started after its root process
+   ended is left (only a running root is killed, since its pid may be another program's by
+   then); a `partWrapper` job cap kills it. Two runs can both hold one lock: when they take over
+   the same stale lock at the same instant, or when one takes over a live run's lock between
+   that run's create and its write (the empty file reads as a dead owner). A clash then shows
+   only where it is visible: two servers on one port fail to bind when they bind the same
+   address, but on Windows a server on 127.0.0.1 and one on the default address can share a
+   port. A stale lock this user may read but not delete reads as held, so its part says
+   "already running" or "no free port" without naming the file. Memory is capped only by a
+   `partWrapper` (accepted 2026-10-08).

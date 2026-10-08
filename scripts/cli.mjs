@@ -19,6 +19,10 @@
 //   node cli.mjs jev test <repo>                one request with a made-up finding, to check the key works
 //   node cli.mjs jev ask harm|priority|proof <findings.json> <repo>
 //                                               Jev's verdict on each finding, as JSON ("rule" = decide by the rules)
+//   node cli.mjs parts <repo> check             the repo's CI parts (<repo>/.first-pass/parts.json), stage by stage
+//   node cli.mjs parts <repo> <checkout> <run-name> all|<part>...
+//                                               runs them on a clean checkout, a stage's parts side by side,
+//                                               each through the main folder's "partWrapper" when it has one
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,9 +34,10 @@ import { drift } from './lib/drift.mjs';
 import { approval } from './lib/fingerprint.mjs';
 import { JEV_URL, configPath, judge, judgeFor, readFindings } from './lib/jev.mjs';
 import { repoHooksHash } from './lib/instructions.mjs';
+import { PartsError, Runner, checkWrapper, describe, loadRecipe } from './lib/parts.mjs';
 import { surveyWorkspace } from './lib/survey.mjs';
 import { countMatching, deleteWordsFile, projectsDir, readRecent, removeStaleWordsFiles, summary, writeWordsFile } from './lib/words.mjs';
-import { CONFIG_PATH, loadWorkspace } from './lib/workspace.mjs';
+import { CONFIG_PATH, findWorkspace, loadWorkspace } from './lib/workspace.mjs';
 
 const PLUGIN_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pluginVersion = () => JSON.parse(fs.readFileSync(path.join(PLUGIN_ROOT, '.claude-plugin', 'plugin.json'), 'utf8')).version;
@@ -146,6 +151,35 @@ async function jev([sub, ...rest]) {
   throw new Error('usage: node cli.mjs jev status [repo] | test <repo> | ask harm|priority|proof <findings.json> <repo>');
 }
 
+const PARTS_USAGE = 'usage: node cli.mjs parts <repo> check | parts <repo> <checkout> <run-name> all|<part>...';
+
+async function parts([repoArg, checkout, run, ...names], inner) {
+  if (!repoArg || !checkout) throw new PartsError(PARTS_USAGE);
+  const repo = path.resolve(repoArg);
+  const recipe = loadRecipe(repo);
+  const ws = findWorkspace(repo);
+  const wrapper = ws?.config.partWrapper === undefined ? null : checkWrapper(ws.config.partWrapper);
+  if (checkout === 'check' && !run) {
+    console.log(`${recipe.file}\n${describe(recipe)}\n${wrapper ? `each part runs through the main folder's partWrapper: ${wrapper[0]}` : 'no partWrapper: parts run side by side in this process'}`);
+    return 0;
+  }
+  if (!run || !names.length) throw new PartsError(PARTS_USAGE);
+  const chosen = names.includes('all') ? [...recipe.parts.keys()] : [...new Set(names.flatMap((n) => recipe.expand(n, 'the command')))];
+  const runner = new Runner({ repo, checkout: path.resolve(checkout), run, recipe, wrapper: inner ? null : wrapper, cli: fileURLToPath(import.meta.url) });
+  const interrupted = () => {
+    runner.note('stopping: interrupted');
+    runner.stopAll();
+  };
+  process.once('SIGINT', interrupted);
+  process.once('SIGTERM', interrupted);
+  try {
+    return (await runner.runParts(chosen, { inner })) ? 0 : 1;
+  } catch (error) {
+    await runner.stopAll();
+    throw error;
+  }
+}
+
 const args = process.argv.slice(2);
 const command = args[0];
 const flags = [];
@@ -188,7 +222,15 @@ if (command === 'survey') {
     console.error(error.message);
     process.exitCode = 2;
   }
+} else if (command === 'parts') {
+  try {
+    process.exitCode = await parts(positional, flags.includes('--inner'));
+  } catch (error) {
+    if (!(error instanceof PartsError)) throw error;
+    console.error(error.message);
+    process.exitCode = 2;
+  }
 } else {
-  console.error('usage: node cli.mjs survey|check [workspace] | record [workspace] [--ci <repo>|all] | cursor-rules <repo> [--check] | words [--sessions <n>] [--count <regex>] [--delete <file>] | jev status|test|ask ...');
+  console.error('usage: node cli.mjs survey|check [workspace] | record [workspace] [--ci <repo>|all] | cursor-rules <repo> [--check] | words [--sessions <n>] [--count <regex>] [--delete <file>] | jev status|test|ask ... | parts ...');
   process.exitCode = 2;
 }

@@ -66,8 +66,8 @@ legal and pricing pages, other repos included).
 In one message, only what matters and is not inferable:
 
 - **Heavy runs.** May sessions start databases, browsers, media tools or full builds without
-  asking? Any memory or time limit, or a wrapper they must go through? (Default: ask before
-  each heavy run.)
+  asking? Any memory or time limit, or a wrapper they must go through (it becomes
+  `partWrapper`, step 4)? (Default: ask before each heavy run.)
 - **Which repos have a UI** (propose the survey's guess, and why), and whether a design tool
   is wanted on them (see step 6).
 - **Which depends on which**, proposed from what you read (for example "web and mobile call
@@ -165,6 +165,14 @@ Write `.first-pass/workspace.json`, then stamp it:
 - first-pass runs hooks on SessionStart, UserPromptSubmit, PreToolUse, PostToolUse and Stop;
   tool hooks for Edit, Write, MultiEdit, NotebookEdit, Bash and PowerShell; never async.
   A repo hook outside that cannot be bridged: `record` refuses it, and the report says so.
+- `partWrapper` (only when step 2's answer names a wrapper heavy runs must go through, such
+  as a memory-capped runner): the program and its arguments, as a list, that the parts runner
+  (step 5) starts each part through. `{{commandFile}}` (a file holding the part's own run, one
+  command line for a shell to run) or `{{command}}` (that line itself) is what the wrapper
+  runs; `{{memoryGB}}`, `{{timeoutMin}}` (the part's own limit plus 5 minutes, so the part
+  stops itself first), `{{name}}`, `{{logs}}`, `{{checkout}}` and `{{repo}}` are filled per
+  part. A part passed only when its run through the wrapper passed (the wrapper exiting 0 is
+  not enough). Without a wrapper, a stage's parts run side by side inside the runner.
 
 Then run `node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" record .`. It stamps each hook
 marked `"approve": true` with the hash of its definition and of every file in the folder of
@@ -217,6 +225,30 @@ say in the report that Claude Code does not load it on its own.
   date, with one exception: when the survey or the start-of-session check says the repo's CI
   changed, rewrite that block's CI line from the CI files (show the owner the old and new
   line) and then run `record . --ci <repo>`.
+- **CI's parts.** When CI's checks split into parts (CI's jobs and shards), write
+  `<repo>/.first-pass/parts.json` so first-pass's parts runner can run them on this machine
+  side by side (`ship-check` step 4), and say in the project block's CI line that it does.
+  `"firstPassParts": 1`; `"stages"`, lists of part names run in order, a stage's parts side by
+  side (parts that share a build folder, a port or a database go in different stages); and
+  `"parts"`, each with `steps` (`name`; `run`, one command for the platform's shell; `cwd`,
+  else the part's `cwd`, else the checkout;
+  `env`; `required`, which stops the part when it fails; `ran`, a regex its log must hold,
+  such as the test runner's totals line, so a run that ran no tests fails; `summary`, a regex
+  for its result lines), and as it needs: `needs` (parts that must pass first on the same
+  checkout), `inputs` (the paths whose contents those results depend on), `shards` (that many
+  copies, with `{{shard}}` and `{{shards}}`), `env`, `envFile` (a `path` in the repo and the
+  `keys` to read from it, never printed), `files` (written for the run, removed after, never
+  over an existing file), a `server` (`run`, `ready`: a regex its log prints once it listens,
+  `url` on this machine (127.0.0.1, localhost or [::1]), `ports`: [low, high], and as needed
+  `cwd`, `env` and `timeoutSec`, 300 by default) started before the steps and stopped with
+  everything it started, `cleanup` steps (run after the steps even when they fail; after a run
+  killed outright, the next run of that part runs them first), `memoryGB` (4) and `timeoutMin`
+  (30). A field the runner does not know is refused, never ignored.
+  `{{run}}` goes in every name two runs must not share (a database), `{{port}}` where the
+  server listens. Commands come from CI's files and the repo's test setup; a part CI gives a
+  service (a database) names the local one it uses, as the project block's services line
+  says. A `parts.json` that exists belongs to the team: leave it and report what looks out
+  of date.
 - **Rules block** only in one-repo mode, or for a repo teammates open on its own: the same
   block as the root, verbatim. Never the profile or words block in a file teammates share;
   in one-repo mode those go in `~/.claude/CLAUDE.md`.
@@ -292,12 +324,15 @@ write its config, then `jev status` and `jev test` once per key.
 ## 7. Check your own work
 
 - Re-read every file you wrote: each block exactly once per repo across its CLAUDE.md and
-  AGENTS.md together (not per file), markers balanced, no `{{` left, and `@AGENTS.md` in
+  AGENTS.md together (not per file), markers balanced, no `{{` left in a block, and `@AGENTS.md` in
   every repo CLAUDE.md whose repo has an AGENTS.md.
 - If a repo formats or lints Markdown in CI (Prettier, markdownlint), run that check on the
   files you wrote in it and fix what it reports.
 - *Plugin:* `node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" check .` prints nothing out of
   date, or explain each line it prints.
+- *Plugin:* for each `parts.json` written, `node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" parts <repo> check`
+  loads it and lists its stages. A recipe is only proven by one full run on a clean checkout
+  (`ship-check` step 4): until then the report says it is not verified.
 - If a CLI is available, confirm a fresh session loads the rules from the root and a repo's
   block once a file in it is read, for example
   `claude -p "Without tools: quote pre-mortem question 2 from your instructions"` at the root,
@@ -312,6 +347,7 @@ Hooks run from the main folder: <id: scope, repos>, or "none"
 Habit words: <n> mapped from <n> sessions | the default list | not installed
 Invariants: <n> drafted in <repo>/INVARIANTS.md, review before relying on them (one line per repo)
 Real tests: <per repo: what exists, or "none: the biggest gap">
+CI's parts: <per repo: its stages, or "none">, not verified until one full run
 Jev judge: <on for <repos> (key from <NAME>) | not set up>
 Verified: <command> → <result>
 Not done: <each step that could not run, and the command to finish it>

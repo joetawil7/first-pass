@@ -123,6 +123,7 @@ first-pass names those checks, and asks for proof before anything is called done
 | `review` | Reviews your own branch before you ask for review (type nothing after it), or a teammate's PRs, several repos at once. Checks the change against its ticket, judges the failed checks and every Bugbot comment, runs the breaker, traces the other code that uses what changed, proves each finding or marks it unproven, and says what the merge needs and how to check the deploy. Reads GitHub and never posts; pushes a fix only on your yes | Only when you type it |
 | `jev` | Sets up the optional Jev judge (TypeSafe's decision model), which `ship-check` asks whether a review finding is real harm, which small ones to fix now, and what proof a small fix needs | Only when you type it |
 | `hulk` | Lifts the task's scope for one task: searches, reviews and bug hunts go across the whole codebase, and problems found anywhere are handled as usual (for a pull request: `/first-pass:review hulk <what>`) | Only when you type it |
+| Parts runner | Runs CI's checks on your machine in the parts your repo's `.first-pass/parts.json` names (setup drafts it from CI): stages in order, a stage's parts side by side, each with its own port, run-named databases and logs, through your memory-capped runner if you have one. It stops only what it started, and a part that needs another refuses to run until that one passed on the same checkout | When `ship-check` runs CI's checks |
 | Hooks | Run each repo's own hooks from the main folder, send back a "done" with no evidence, say what drifted at session start, and hold `sharpen`'s work until its rewrite is shown | Every session |
 
 ## If you keep all your repos in one folder
@@ -176,6 +177,11 @@ What it reads and keeps:
   lines, and it lists each one it adds.
 - `INVARIANTS.md` in each repo (a draft for you to review), `.first-pass/workspace.json` at
   the root, and `.claude/cursor-rules/*.md` copies where a repo imports `.mdc` files.
+- `.first-pass/parts.json` in a repo whose CI checks split into parts, for the parts runner, and
+  the runner's logs, marks and lock files in `first-pass-parts` in the system temp folder. They
+  stay there after a run, so you can read them. Delete the folder only when no run is going:
+  a killed run's leftovers (a file it wrote in the checkout, a test database) are cleaned up by
+  the next run of that part only while its record is there.
 - A small state folder in `~/.claude/plugins/data/` for the hooks, and a temp file while
   `habit-words` runs, deleted when it's done.
 - `~/.claude/first-pass/jev.json`, only if you set up the Jev judge: which variable holds
@@ -183,7 +189,9 @@ What it reads and keeps:
 
 Setup never commits or pushes, and sends nothing anywhere except one test request per key
 to TypeSafe if you set up the Jev judge: you review the files and commit them. The plugin's own
-scripts make no network calls and read no keys or tokens from your environment, with one
+scripts make no network calls and read no keys or tokens from your environment (the parts
+runner runs your repo's own test commands, reads only the keys its recipe names from your
+repo's env file, and checks only that a test server on this machine answers), with one
 exception you have to switch on: the Jev judge reads the one key you named and sends review
 findings (with secrets, emails and phone numbers blanked) to TypeSafe's API, from
 `ship-check` and `jev`. Besides that, the only skill that reaches a server is `review`: it
@@ -239,7 +247,7 @@ Cursor.
    "Not handled, because" lines: those are your calls.
 2. **Build**, with the tests the pre-mortem named, each one failing on the old code first.
 3. **Done.** `ship-check` runs the breaker and, while it works, CI's checks in a clean
-   checkout, when your repo's test limits allow both at once. Nothing is committed to your
+   checkout (in CI's own parts side by side, when the repo has a parts recipe), when your repo's test limits allow both at once. Nothing is committed to your
    branch before the review's result is handled unless you say to ship it as it is, and
    nothing is called done before it either way. Then it reports
    `Verified: <what was run> → <result>` and what wasn't verified.

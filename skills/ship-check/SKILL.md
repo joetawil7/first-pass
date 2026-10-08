@@ -191,6 +191,19 @@ In the step 2 worktree with the whole change copied in, run exactly the commands
 touches; the whole integration suite when the change touches jobs, payments, publishing,
 deletion or auth). Follow the project's rules for heavy runs.
 
+When the repo has `.first-pass/parts.json`, run them with first-pass's parts runner:
+`node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" parts <repo> <worktree> <run-name> all`, where
+`<repo>` is the repo's own folder (the recipe and the env files it names are read there, never
+from the worktree) and `<run-name>` is lowercase letters and digits, new for each worktree. It
+runs the recipe's stages in order and each stage's parts side by side, each with its own port,
+its own run-named databases and its own logs, and through the main folder's `partWrapper` when
+it has one (the machine's memory cap: start the runner itself directly, never inside that cap).
+A later edit reruns only the parts it can affect, named instead of `all`; a part refuses to run
+while a part it needs has not passed on that worktree with the same inputs. `parts <repo> check`
+lists the parts. It prints its logs folder at the start and the end: read `summary.txt` there, and
+the log of each step that failed. A stopped run cleans up after itself; one killed outright is
+cleaned up by the next run of that part on the same run name.
+
 A failure that also happens on the base without the change is pre-existing: name the test
 and move on. A failure the change caused gets a fix; a fix that is more than small goes
 back to step 3, reviewed like a fix for real harm. The fix reruns the part that failed and
