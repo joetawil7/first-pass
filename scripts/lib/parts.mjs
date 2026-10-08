@@ -213,10 +213,34 @@ export function alive(pid) {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
-    return true;
   } catch (error) {
     return error.code === 'EPERM';
   }
+  // On Linux a killed process stays a zombie until its parent reaps it; it holds nothing.
+  if (process.platform !== 'linux' || !procIsOurs()) return true;
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    return !/^[ZX]/.test(stat.slice(stat.lastIndexOf(') ') + 2));
+  } catch (error) {
+    if (error.code === 'ENOENT' || error.code === 'ESRCH') return false; // reaped while read
+    if (error.code === 'EPERM' || error.code === 'EACCES') return true; // a locked-down /proc: held
+    throw error;
+  }
+}
+
+// /proc shows this process's own pids only when its entry for "self" is this process: in a pid
+// namespace that kept another /proc, a live process can be missing from it.
+let procOurs = null;
+export function procIsOurs() {
+  if (procOurs === null) {
+    try {
+      procOurs = fs.readFileSync('/proc/self/stat', 'utf8').startsWith(`${process.pid} `);
+    } catch (error) {
+      if (!['ENOENT', 'EPERM', 'EACCES'].includes(error.code)) throw error;
+      procOurs = false;
+    }
+  }
+  return procOurs;
 }
 
 // An exclusive lock file holding the owner's pid; one whose owner is gone is taken over. Two runs

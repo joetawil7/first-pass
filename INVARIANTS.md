@@ -91,7 +91,8 @@ holds it today and where it is known to break.
 12. **The parts runner only ever stops processes it started (by their own pid, with everything they started), only takes a port that nothing answers on and no live run holds, never writes over a file it did not create, never prints a value it reads from an env file, and never calls a part passed unless every step ran, exited 0 and, where the recipe says what a run prints, printed it, and no part it needs was run again while it ran; a part that needs another refuses while that one has not passed on the same checkout with the same inputs.**
    Held by: `stopTree` (Windows: `taskkill /T` only while the root still runs; elsewhere its
    own process group), `takePort`, `portFree`, `lock`, `claimRun`, `readEnvFile`, `notReady`,
-   `writeMark` and `Runner.runPart` in `scripts/lib/parts.mjs`; the recipe is read from the repo's
+   `writeMark`, `Runner.runPart`, `alive` (on Linux a zombie owns nothing) and `procIsOurs` in
+   `scripts/lib/parts.mjs`; the recipe is read from the repo's
    own folder, never the checkout under test (`loadRecipe`); `test/parts.test.mjs`.
    A part run through a `partWrapper` passed only when that run wrote its mark (`runWrapped`);
    a stopped run asks its wrapped runs to stop through a file, so they clean up (`stopAll`); a
@@ -108,6 +109,8 @@ holds it today and where it is known to break.
    that run's create and its write (the empty file reads as a dead owner). A clash then shows
    only where it is visible: two servers on one port fail to bind when they bind the same
    address, but on Windows a server on 127.0.0.1 and one on the default address can share a
-   port. A stale lock this user may read but not delete reads as held, so its part says
+   port. On macOS, and on Linux where /proc belongs to another pid namespace or will not say, an
+   owner that is dead but not yet reaped reads as a live run until it is reaped. A stale lock
+   this user may read but not delete reads as held, so its part says
    "already running" or "no free port" without naming the file. Memory is capped only by a
    `partWrapper` (accepted 2026-10-08).

@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { PartsError, Runner, alive, checkWrapper, inputsHash, loadRecipe, lock, logsDir, partsRoot, readEnvFile, readMark, stopTree, unlock } from '../scripts/lib/parts.mjs';
+import { PartsError, Runner, alive, checkWrapper, inputsHash, loadRecipe, lock, logsDir, partsRoot, procIsOurs, readEnvFile, readMark, stopTree, unlock } from '../scripts/lib/parts.mjs';
 
 const CLI = fileURLToPath(new URL('../scripts/cli.mjs', import.meta.url));
 const NODE = `"${process.execPath}"`;
@@ -217,6 +217,42 @@ test('a run name belongs to its first checkout, however the path is spelled, and
   other.cleanup();
 });
 
+test('on Linux a killed process its parent has not reaped yet (a zombie) holds no lock', { skip: process.platform !== 'linux' }, async () => {
+  // The shell starts a short sleep, then becomes node, which never reaps that sleep.
+  const parent = spawn('sh', ['-c', "sleep 0.2 & echo $!; exec node -e 'setInterval(() => {}, 1000)'"], { stdio: ['ignore', 'pipe', 'ignore'] });
+  const zombie = Number(await new Promise((r) => parent.stdout.once('data', (d) => r(String(d).trim()))));
+  await new Promise((r) => setTimeout(r, 1000));
+  const state = fs.readFileSync(`/proc/${zombie}/stat`, 'utf8');
+  parent.kill('SIGKILL');
+  assert.match(state.slice(state.lastIndexOf(') ') + 2), /^Z/, 'the sleep is a zombie');
+  assert.equal(alive(zombie), false);
+});
+
+test('on Linux a process reaped while it is being checked reads as gone, never a crash', { skip: process.platform !== 'linux' }, async () => {
+  for (let i = 0; i < 300; i++) {
+    const sh = spawn('sh', ['-c', 'sleep 0.02 & echo $!; wait'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const pid = Number(await new Promise((r) => sh.stdout.once('data', (d) => r(String(d).trim()))));
+    while (alive(pid)) {
+      // checked again and again while the shell reaps it
+    }
+    await new Promise((r) => sh.once('exit', r));
+  }
+});
+
+test("on Linux /proc is trusted only when it is this process's own", { skip: process.platform !== 'linux' }, (t) => {
+  assert.equal(procIsOurs(), true);
+  // A new pid namespace that keeps the outer /proc: its pids are not the ones /proc shows.
+  const lib = new URL('../scripts/lib/parts.mjs', import.meta.url).href;
+  const r = spawnSync('unshare', ['-p', '-f', '--', process.execPath, '--input-type=module', '-e', `import { procIsOurs } from '${lib}'; console.log(procIsOurs());`], { encoding: 'utf8', timeout: 30000 });
+  // Skipped only when unshare itself refuses; an error from the code under test fails it.
+  if (r.error || (r.status !== 0 && r.stderr.startsWith('unshare:'))) {
+    t.skip(`no pid namespace here: ${(r.error?.message ?? r.stderr).trim().split('\n')[0]}`);
+    return;
+  }
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout.trim(), 'false');
+});
+
 test('a lock held by a live process is respected, and one left by a dead process is taken over', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'first-pass-lock-'));
   const file = path.join(dir, 'x.lock');
@@ -417,16 +453,24 @@ test('a part killed before its cleanup is cleaned up by the next run of it, whic
   const running = r.runParts(['p']);
   assert.equal(await waitFor(path.join(f.dir, 'slow.pid')), true);
   const slow = Number(fs.readFileSync(path.join(f.dir, 'slow.pid'), 'utf8'));
-  // A hard kill, no stop file: on Linux and macOS a SIGTERM would let the runner clean up itself.
+  // A hard kill, no stop file: on Linux and macOS a SIGTERM would let the runner clean up itself,
+  // and on Windows taskkill /T ends the deepest processes first, so the runner could see its step
+  // die and clean up before its own turn: it is ended first.
+  const owner = Number(fs.readFileSync(path.join(r.logs, 'p.lock'), 'utf8'));
   for (const child of r.active) {
-    if (process.platform === 'win32') await stopTree(child);
-    else {
+    if (process.platform === 'win32') {
+      process.kill(owner);
+      await stopTree(child);
+    } else {
       process.kill(-child.pid, 'SIGKILL');
       await child.done;
     }
   }
   assert.equal(await running, false);
   if (alive(slow)) process.kill(slow); // a process group the hard kill did not reach
+  // The next run comes once the kill has finished: a killed process can take a moment to die.
+  for (let i = 0; i < 60 && alive(owner); i++) await new Promise((res) => setTimeout(res, 250));
+  assert.equal(alive(owner), false, 'the killed run is gone');
   assert.equal(fs.existsSync(path.join(f.co, 'cfg', `${f.run}.txt`)), true, 'the killed run left its file');
   assert.equal(fs.existsSync(path.join(f.dir, 'cleaned')), false, 'and did not clean up');
   const raw = JSON.parse(fs.readFileSync(path.join(f.repo, '.first-pass', 'parts.json'), 'utf8'));
