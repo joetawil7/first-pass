@@ -9,7 +9,7 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
 - **What it is:** first-pass itself: a Claude Code plugin (`.claude-plugin/`, `hooks/hooks.json`,
   `scripts/`) and a skills pack (`skills/`) that other tools install with `npx skills`. The
   setup skill's assets (`skills/setup-first-pass/assets/`) are the rules block, profile block,
-  default words block, workspace block, project block, INVARIANTS template and the breaker
+  default words block, machine block, workspace block, project block, INVARIANTS template and the breaker
   agent. The `habit-words` skill reads the user's own session transcripts
   (`scripts/lib/words.mjs`). The `sharpen` skill runs only when the user types it
   (`disable-model-invocation`) and rewrites the prompt given with it; its gate
@@ -31,11 +31,11 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   --strict .` and on `.claude-plugin/plugin.json` (Claude Code pinned to 2.1.280), skill names
   match folders, the skills the rules name (`premortem`, `ship-check`, `fix-the-class`,
   `setup-first-pass`, `habit-words`, `sharpen`, `review`, `jev`, `hulk`) and the breaker asset exist, every
-  block has one start and one end marker, the rules, profile and words block versions equal
+  block has one start and one end marker, the rules, profile, words and machine block versions equal
   `plugin.json`'s, the hooks point at scripts that exist, `node --test test/*.test.mjs`, and
   the private-name check.
 - **Run one test file:** `node --test test/lib.test.mjs` (also `hooks.test.mjs`,
-  `setup.test.mjs`, `words.test.mjs`, `sharpen.test.mjs`, `jev.test.mjs`, `parts.test.mjs`).
+  `setup.test.mjs`, `machine.test.mjs`, `words.test.mjs`, `sharpen.test.mjs`, `jev.test.mjs`, `parts.test.mjs`).
 - **Real tests** (the layer that catches what mocks miss): `test/hooks.test.mjs` runs
   `scripts/hooks.mjs` the way Claude Code does, against throwaway main folders in the system
   temp folder; `test/jev.test.mjs` runs the judge and `cli.mjs jev` against a fake Jev
@@ -50,6 +50,7 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   `~/.claude` (the tests set `CLAUDE_CONFIG_DIR` to a temp folder). The parts tests take ports
   from 41000 to 49010 only, with lock files beside real runs' in `first-pass-parts/ports`.
 - **Heavy runs** (databases, browsers, media tools, builds): none.
+- **Local runs that reach real people** (what a local server, worker or test run sends for real, and the empty keys or switches that stop it): none found: the plugin sends nothing; the Jev tests use a fake server on 127.0.0.1, and `jev test` and `jev ask` reach TypeSafe only once the owner has set up a key.
 - **Monitoring** (where a swallowed error must end up): a failing bridged hook becomes a
   `systemMessage` the user sees (`scripts/lib/merge.mjs`); a crash in first-pass itself is a
   Claude Code hook error.

@@ -233,7 +233,9 @@ step 8.
 - **The breaker.** Hand each change to the `breaker` agent (Claude Code: `first-pass:breaker`,
   or `breaker` where a repo installed its own; Cursor: `/breaker`) in its own context, in
   parallel when there are several, at most three at once and within the repo's test limits
-  (one after another where they forbid runs side by side). Give it: what the change is for (title, description,
+  (one after another where they forbid runs side by side) and the machine block's limit on heavy
+  runs at once, counting your own test runs: give each breaker its share (how many heavy runs it
+  may start), none when no share is left. Give it: what the change is for (title, description,
   ticket), the repo and its temp clone's path, the base and head shas, the description's
   claims as the author's pre-mortem to check, the other PRs of the same change, what is live
   today, the related repos' temp clone paths to read neighbors in, whether it may run the
@@ -269,9 +271,11 @@ step 8.
       a new store build when it touches native code, app config, permissions or native SDK
       versions, and can go as an over-the-air update otherwise; check the repo's update setup.
     - Order: which repo deploys first, and what breaks in between.
-  - **UI.** A change to screens gets the words check. Look at it running only when the
-    repo's rules give a way within its limits (a screenshot or component test, a dev server
-    under the heavy-run rules); otherwise report "Not checked: the UI was not looked at".
+  - **UI.** A change to screens gets the words check. Look at it running with the repo's UI
+    check and the browsers and devices the machine block names, within its heavy-run limits,
+    when this change's code may run (see "Whose code runs"); otherwise report "Not checked:
+    the UI was not looked at running", and why (when this machine lacks the tool, what to
+    install, from the machine block's "Missing:" line, installed only with the user's yes).
 - **Size it to the change.** A copy or docs PR gets the words check and CI; a PR that
   changes behaviour gets all of it.
 

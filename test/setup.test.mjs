@@ -211,7 +211,7 @@ test('the work goes on while a review runs, but nothing is committed or called d
     assert.match(text, /in the background/, `${file}: a review runs in the background`);
     assert.match(text, /reads or runs but does not edit the files under review/, `${file}: nothing edits what the reviewer reads`);
     assert.match(text, /Edits wait for the review/, `${file}: edits wait for the review`);
-    assert.match(text, /Only runs the repo's test limits allow beside the review go at the same time/, `${file}: only runs the test limits allow`);
+    assert.match(text, /Only runs the repo's test limits and the machine block's limit on heavy runs at once allow beside the review go at the same time/, `${file}: only runs the test limits and the machine block allow`);
     assert.match(text, /which ports, databases and suites the session will use while it runs/, `${file}: the reviewer is told what will be in use`);
     assert.match(text, /Edits wait for the review \(a fix found meanwhile joins its fixes\), so the reviewer never reads a tree that is changing/, `${file}: edits wait, no exceptions`);
     assert.match(text, /Until the review's result is in and handled, every reply says built, not done, and what it waits on; nothing of the change is committed to the user's branch, pushed or merged, unless the user says to ship it as it is .{0,70}; and either way it is not called done/, `${file}: shipping as it is never makes unreviewed work "done"`);
@@ -299,7 +299,8 @@ test('work stays inside the task scope, and only hulk lifts it', () => {
   assert.match(hulk, /disable-model-invocation: true/, 'only the user starts hulk');
   assert.match(hulk, /\*\*Everything else in the rules still holds\*\*: a yes before money, production or anything outward-facing/, 'hulk never lifts the yes rules');
   assert.doesNotMatch(read('README.md'), /The reviewer still reports everything\./, 'the README no longer says the reviewer reports everything');
-  assert.match(read('README.md'), /This is version 0\.6,/, 'the README names the version');
+  const minor = JSON.parse(read('.claude-plugin/plugin.json')).version.split('.').slice(0, 2).join('\\.');
+  assert.match(read('README.md'), new RegExp(`This is version ${minor},`), 'the README names the version plugin.json has');
   assert.match(breaker, /Other features, and the other steps of shared paths, are not, even in the same files/, 'the reviewer leaves other steps of a shared path outside');
   assert.match(read('README.md'), /anything the change itself breaks counts as inside, wherever it is/, 'the README keeps harm the change caused inside');
   assert.match(read('README.md'), /finds the same pattern in the task's scope, and adds the check/, 'the README bug bullet matches the scope');

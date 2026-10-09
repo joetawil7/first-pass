@@ -104,6 +104,14 @@ first-pass names those checks, and asks for proof before anything is called done
   code paths that touch the same data.
 - **"Done" means a test that failed before the change**, the breaker's review, and CI's own
   checks passing in a clean checkout. Short of that, it's reported as built, not done.
+- **A UI change is looked at running** before it's called done: the web at a desktop and a
+  phone width, an app on each device class it ships to, with the browsers, simulators and
+  devices this machine has. Setup writes them down in the machine block, and for each UI
+  repo says what is missing to look at it (a Playwright browser, a simulator, a device tool)
+  with its install command; it installs only what you say yes to.
+- **Local runs that reach real people are named.** Setup looks for what each repo could send
+  for real (email, SMS, push, payments, publishing) and the switches that stop it, says
+  "unknown" where it can't tell, and the standing yes for heavy runs never covers such a run.
 - **Bugs get fixed as a class**: reproduce, find the same pattern in the task's scope (the
   whole codebase when your own prompt asks for that fix, not when you pick it from a task's
   list), and add the
@@ -123,7 +131,7 @@ first-pass names those checks, and asks for proof before anything is called done
 | `review` | Reviews your own branch before you ask for review (type nothing after it), or a teammate's PRs, several repos at once. Checks the change against its ticket, judges the failed checks and every Bugbot comment, runs the breaker, traces the other code that uses what changed, proves each finding or marks it unproven, and says what the merge needs and how to check the deploy. Reads GitHub and never posts; pushes a fix only on your yes | Only when you type it |
 | `jev` | Sets up the optional Jev judge (TypeSafe's decision model), which `ship-check` asks whether a review finding is real harm, which small ones to fix now, and what proof a small fix needs | Only when you type it |
 | `hulk` | Lifts the task's scope for one task: searches, reviews and bug hunts go across the whole codebase, and problems found anywhere are handled as usual (for a pull request: `/first-pass:review hulk <what>`) | Only when you type it |
-| Parts runner | Runs CI's checks on your machine in the parts your repo's `.first-pass/parts.json` names (setup drafts it from CI): stages in order, a stage's parts side by side, each with its own port, run-named databases and logs, through your memory-capped runner if you have one. It stops only what it started, and a part that needs another refuses to run until that one passed on the same checkout | When `ship-check` runs CI's checks |
+| Parts runner | Runs CI's checks on your machine in the parts your repo's `.first-pass/parts.json` names (setup drafts it from CI): stages in order, a stage's parts side by side, each with its own port, run-named databases and logs, through your memory-capped runner if you named one (with one repo and no main folder, one part at a time inside it). It stops only what it started, and a part that needs another refuses to run until that one passed on the same checkout | When `ship-check` runs CI's checks |
 | Hooks | Run each repo's own hooks from the main folder, send back a "done" with no evidence, say what drifted at session start, and hold `sharpen`'s work until its rewrite is shown | Every session |
 
 ## If you keep all your repos in one folder
@@ -175,6 +183,13 @@ What it reads and keeps:
   and your habit words), and a section in each repo's `CLAUDE.md` or
   `AGENTS.md`, all between `first-pass` markers. Outside the markers it adds only import
   lines, and it lists each one it adds.
+- The machine block in your `~/.claude/CLAUDE.md`, in every mode: this machine's answer on
+  heavy runs (in every project on it, except a server, a worker or an end-to-end or integration
+  run in a repo with no first-pass section, or whose real-people line says "unknown" or is
+  missing, which asks first), how a run is bounded and stopped here (a wrapper named there is
+  the one the parts runner starts each part through in a main folder), and what can look at a UI (browsers,
+  simulators, emulators, device tools) or is missing for it. It describes your machine only, so it never goes in
+  a file your teammates share.
 - `INVARIANTS.md` in each repo (a draft for you to review), `.first-pass/workspace.json` at
   the root, and `.claude/cursor-rules/*.md` copies where a repo imports `.mdc` files.
 - `.first-pass/parts.json` in a repo whose CI checks split into parts, for the parts runner, and
@@ -194,7 +209,8 @@ runner runs your repo's own test commands, reads only the keys its recipe names 
 repo's env file, and checks only that a test server on this machine answers), with one
 exception you have to switch on: the Jev judge reads the one key you named and sends review
 findings (with secrets, emails and phone numbers blanked) to TypeSafe's API, from
-`ship-check` and `jev`. Besides that, the only skill that reaches a server is `review`: it
+`ship-check` and `jev`. Setup's survey reads only the variable names in the example env files
+a repo commits (`.env.example` and the like), never a value and never your real `.env`. Besides that, the only skill that reaches a server is `review`: it
 reads the PRs, checks and comments through your own `gh` login, and it pushes a fix only
 when you picked that fix and said yes to the push.
 
@@ -247,7 +263,7 @@ Cursor.
    "Not handled, because" lines: those are your calls.
 2. **Build**, with the tests the pre-mortem named, each one failing on the old code first.
 3. **Done.** `ship-check` runs the breaker and, while it works, CI's checks in a clean
-   checkout (in CI's own parts side by side, when the repo has a parts recipe), when your repo's test limits allow both at once. Nothing is committed to your
+   checkout (in CI's own parts side by side, when the repo has a parts recipe), when your repo's test limits and your machine's limit on heavy runs at once allow both. Nothing is committed to your
    branch before the review's result is handled unless you say to ship it as it is, and
    nothing is called done before it either way. Then it reports
    `Verified: <what was run> → <result>` and what wasn't verified.
@@ -345,7 +361,7 @@ they help on your code.
   more. So the agent first does every part that doesn't depend on your answer, then asks
   what's left in one set.
 - **It won't make code bug free.** The aim is fewer and smaller escapes: no high-severity
-  ones, no bug class found twice. This is version 0.6, so that's the design, not a measured
+  ones, no bug class found twice. This is version 0.8, so that's the design, not a measured
   result yet.
 - **Rules alone fade.** The fixes that last are the ones `fix-the-class` pushes toward: a
   shared helper that's the only way to do a thing, a database constraint, a CI check.

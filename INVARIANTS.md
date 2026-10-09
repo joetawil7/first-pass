@@ -29,7 +29,7 @@ holds it today and where it is known to break.
    Held by: convention only (`skills/setup-first-pass/SKILL.md` steps 3, 5 and 7); CI checks the
    assets' markers and versions, not what setup writes.
    Known breaks: none known.
-6. **The rules, profile and words blocks carry the plugin's version.**
+6. **The rules, profile, words and machine blocks carry the plugin's version.**
    Held by: the "Managed block versions match plugin.json" step in `.github/workflows/validate.yml`.
    Known breaks: none known.
 7. **Nothing in the repo names the private projects first-pass came from.**
@@ -60,7 +60,10 @@ holds it today and where it is known to break.
 10. **The plugin's own scripts make no network call (the README promises it), except the Jev judge once the user has set it up: it sends only to the configured https endpoint (or this machine), only the findings asked about with secrets, emails and phone numbers blanked, and never prints the key.**
    Held by: `shellRoots` in `scripts/lib/shell-edits.mjs`, which only looks up paths inside the
    main folder and never a `//host` or `\\host` one (on Windows, looking one up contacts that
-   host); the `shellRoots` test in `test/lib.test.mjs` fails if one is looked up. The parts
+   host); the `shellRoots` test in `test/lib.test.mjs` fails if one is looked up. The survey's
+   machine facts skip such paths the same way on Windows (`local` in `scripts/lib/survey.mjs`,
+   for PATH entries and the Android, emulator and Playwright folders), and say what they
+   skipped; `test/machine.test.mjs` fails if one is looked up. The parts
    runner's server probe only takes a url on this machine (`LOCAL_URL` in `scripts/lib/parts.mjs`,
    tested in `test/parts.test.mjs`); the commands a recipe runs are the repo's own, as its tests are. For the
    judge: `judgeFor`, `checkUrl`, `stateFor` (through `redact`), `keyFor` (the key trimmed
@@ -69,7 +72,8 @@ holds it today and where it is known to break.
    `test/jev.test.mjs`.
    Known breaks: a repo, main folder or working folder that itself lives on a network share
    or a mapped network drive is read over the network by `git status`, as the user's own
-   git does. Redaction is pattern-based (see 8), so a secret with no telltale shape inside a
+   git does. A mapped network drive (`Z:\bin`) on PATH, or as the Android or Playwright folder,
+   is looked up by the survey: only `\\host` and `//host` paths are recognised. Redaction is pattern-based (see 8), so a secret with no telltale shape inside a
    finding's text is sent. The key for a folder is chosen by path and git (`repoHome` in
    `scripts/lib/jev.mjs`); a config with separate accounts has no default key, so a folder no
    entry names has the judge off. Known gaps: a shared clone, or a worktree of a bare repo
@@ -114,3 +118,10 @@ holds it today and where it is known to break.
    this user may read but not delete reads as held, so its part says
    "already running" or "no free port" without naming the file. Memory is capped only by a
    `partWrapper` (accepted 2026-10-08).
+13. **The survey reads secrets from nowhere: of env files it reads only the example ones a repo commits, and only the names of senders and switches come out, never a value; of the machine it reads the OS, PATH and known tool folders, and the one command it runs is `xcrun simctl list` on a Mac.**
+   Held by: `outwardFacts` (`ENV_EXAMPLE`, tracked files only, `ENV_NAME`, a size cap) and
+   `machineFacts` in `scripts/lib/survey.mjs`; `test/machine.test.mjs` (a value and a name
+   from an untracked `.env.local` never appear in the output).
+   Known breaks: an example env file that holds real values is still read (its names only
+   come out). A sender whose variable name matches none of the known vendors is missed, and
+   setup is told to confirm each one in the code.

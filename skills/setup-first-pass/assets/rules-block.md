@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.7.1 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.8.0 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -117,9 +117,10 @@ skill has the full procedure.
   reads or runs but does not edit the files under review: CI's checks in the clean checkout,
   the words, monitoring and invariants checks, and a draft of the report. Edits wait for the
   review (a fix found meanwhile joins its fixes), so the reviewer never reads a tree that is
-  changing. Only runs the repo's test limits allow beside the review go at the same time, and
-  the reviewer is told which ports, databases and suites the session will use while it runs,
-  so it leaves them alone. Until the review's result is in and handled, every reply says
+  changing. Only runs the repo's test limits and the machine block's limit on heavy runs at once
+  allow beside the review go at the same time, counting the reviewer's own, and the reviewer is
+  told which ports, databases and suites the session will use while it runs, so it leaves them
+  alone, and how many heavy runs it may start meanwhile. Until the review's result is in and handled, every reply says
   built, not done, and what it waits on; nothing of the change is committed to the user's
   branch, pushed or merged, unless the user says to ship it as it is (commits in a temp clone
   made for a review are fine); and either way it is not called done. Any edit CI's clean
@@ -142,6 +143,15 @@ skill has the full procedure.
   they pass, write "full checks still to run" in the task list, and every report says built,
   not done, and which checks ran on the latest edit. The `review` skill waits for its
   reviewers, as it says.
+- **UI changes are looked at running.** A change to what a screen shows or how it behaves is
+  looked at running before it is called done: the repo's section says how (its UI check: the
+  dev server, the spec or the app to open), the machine block says with what (the browsers,
+  simulators and devices on this machine). The web at a desktop and a phone width, a native
+  app on each device class it ships to, in the states the change touches (empty, error, long
+  text); the screenshot paths go in the report. When this machine has no way to look, the
+  report says "Not checked: the UI was not looked at running", why, and what to install to
+  look (the machine block's "Missing:" line, or the tool's current docs), installed only with
+  the user's yes.
 - **Scale it to the change.** A change with no logic in it (a comment, a doc, a spelling
   fix that changes no behaviour) needs only the repo's format, lint and build checks, plus
   the words check when people read the text. A change that alters behaviour gets all of it,
@@ -228,7 +238,27 @@ skill has the full procedure.
   production deletes and outward-facing actions still need a yes.
 - **Secrets.** Never ask for one to be pasted, and never repeat one that was. Ask for it to
   be set where the code reads it (`.env.local`, the service's settings) and work with the
-  variable name.
+  variable name. An env file that holds keys is never opened with a file tool, printed, or searched with a
+  command that prints its lines: check it with `grep -cE` or `grep -lE` and a pattern of the names
+  (`'^[[:space:]]*(export[[:space:]]+)?(NAME_A|NAME_B)[[:space:]]*[=:]'`), which print only a
+  count or a file name; make a copy without those names with `grep -vE '<that pattern>' <file> >
+  <copy>`, then check the copy the same way. A search across a repo skips env files
+  (`--exclude='.env*'`).
+- **Heavy runs follow the machine block.** Its answer says whether a database, browser,
+  emulator, media tool or full build may start without asking, its limits bound every one,
+  and the repo's section names what each heavy run is. A test runner's timeout is not a kill:
+  when a run ends or times out, its whole process tree is stopped and checked gone. The
+  standing yes never covers a local run that reaches real people (email, SMS, push, payments,
+  publishing to real accounts). Such a run asks first, unless it runs with the keys and switches
+  its repo's section lists set, setting them stops it, and the section does not say it needs a
+  yes. Setting them stops it only when nothing in the run puts the real ones back: an env file its own
+  commands load, an app built with the real ones, or a server it talks to but did not start (a test runner may reuse one already running:
+  Playwright's `reuseExistingServer`). A yes for a run that reaches real people covers that one run: a rerun, after a fix or for
+  the full checks, asks again. In a repo whose "Local runs that reach real people" line says "unknown", that
+  has no such line, or that has no first-pass section, any server, worker or end-to-end or
+  integration run counts as one and asks first, whatever keys are set. There, format, lint,
+  typecheck, unit tests and builds don't count as one, unless the section names them as
+  reaching real people. With no machine block loaded, ask before each heavy run.
 - **What you start, you stop.** Dev servers, watchers, test runners, tunnels, emulators,
   containers and background shells: note the PID, stop the whole process tree when done
   (`taskkill /PID <pid> /T /F` on Windows), and check the port is free. Never stop a process

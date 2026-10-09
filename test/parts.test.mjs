@@ -337,6 +337,32 @@ test('env file keys reach the part and its placeholders, a missing key fails it,
   g.cleanup();
 });
 
+test('a step\'s own env is applied after the part\'s, so it can put a blanked key back', async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['p']], parts: { p: { env: { SECRET_A: '' }, steps: [{ name: 't', env: { SECRET_A: 'from-the-step' }, run: s('envdump.js', path.join(dir, 'env.json')), ran: 'passed' }] } } }));
+  try {
+    const r = await runner(f, ['p']);
+    assert.equal(r.ok, true, r.text);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(f.dir, 'env.json'), 'utf8')).A, 'from-the-step', 'which is why setup and ship-check never let one set a listed key');
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('a key a part blanks in its env stays blank, whatever the env file or the shell hold', async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['p']], parts: { p: { envFile: { path: '.env.local', keys: ['SECRET_A'] }, env: { SECRET_A: '', PLAIN_B: '' }, steps: [{ name: 't', run: s('envdump.js', path.join(dir, 'env.json')), ran: 'passed' }] } } }), { envText: 'SECRET_A=real-key\n' });
+  process.env.PLAIN_B = 'from-the-shell';
+  try {
+    const r = await runner(f, ['p']);
+    assert.equal(r.ok, true, r.text);
+    const seen = JSON.parse(fs.readFileSync(path.join(f.dir, 'env.json'), 'utf8'));
+    assert.equal(seen.A, '', 'the env file does not put the key back');
+    assert.equal(seen.B, '', 'the shell does not put the key back');
+  } finally {
+    delete process.env.PLAIN_B;
+    f.cleanup();
+  }
+});
+
 test('readEnvFile reads quotes, export and comments, and refuses a missing file', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'first-pass-env-'));
   fs.writeFileSync(path.join(dir, '.env'), "A='one two'\nexport B=two # note\nB=second\nC=\"x#y\"\n");

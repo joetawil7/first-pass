@@ -48,7 +48,7 @@ jobs:
             n=$(grep -c "$2" "$1")
             if [ "$n" != 1 ]; then echo "::error file=$1::'$2' appears $n times, expected 1"; status=1; fi
           }
-          for block in rules profile words workspace project; do
+          for block in rules profile words machine workspace project; do
             check "skills/setup-first-pass/assets/$block-block.md" "first-pass:$block:start"
             check "skills/setup-first-pass/assets/$block-block.md" "first-pass:$block:end"
           done
@@ -58,7 +58,7 @@ jobs:
         run: |
           v=$(node -p "require('./.claude-plugin/plugin.json').version")
           status=0
-          for block in rules profile words; do
+          for block in rules profile words machine; do
             if ! grep -q "first-pass:$block:start v$v " "skills/setup-first-pass/assets/$block-block.md"; then
               echo "::error::$block-block.md version does not match plugin.json $v"; status=1
             fi

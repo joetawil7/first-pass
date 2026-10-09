@@ -117,8 +117,8 @@ scripts, migrations, tests, docs) and every repo that uses it for other readers 
 
 ```
 grep -rn "<column_or_field>" --include=*.<ext> <repo> <each repo that uses it>
-grep -rn "'<status_value>'" <repo>
-grep -rn "<queue_or_event_name>" <repo> <each repo that uses it>
+grep -rn --exclude='.env*' "'<status_value>'" <repo>
+grep -rn --exclude='.env*' "<queue_or_event_name>" <repo> <each repo that uses it>
 ```
 
 List each neighbor in the plan and say what it needs: nothing (why), a change, or a test.

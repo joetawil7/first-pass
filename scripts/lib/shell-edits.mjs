@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { commandTarget } from './bridge.mjs';
-import { gitRoot, isInside, pathKey, relative, resolveShellPath } from './paths.mjs';
+import { gitRoot, isInside, isNetworkPath, pathKey, relative, resolveShellPath } from './paths.mjs';
 import { appendLine, createRecord, hasRecord, readLines, readRecord, recordNames, writeRecord } from './state.mjs';
 import { repoOf } from './workspace.mjs';
 
@@ -30,8 +30,6 @@ const NOTE = 'shell-note-';
 const hash = (text) => createHash('sha1').update(text).digest('hex').slice(0, 12);
 const noteName = (root) => `${NOTE}${hash(pathKey(root))}`;
 const brokenName = (promptId, root) => `shell-broken-${hash(String(promptId))}-${hash(pathKey(root))}`;
-// `\\host\share` and `//host/share`: looking one up makes Windows contact that host.
-const isNetworkPath = (p) => /^[\\/]{2}/.test(p);
 
 function gitRootOf(place, stopAt) {
   try {

@@ -1,4 +1,4 @@
-<!-- first-pass:profile:start v0.7.1 (the default profile, managed by the setup-first-pass skill; put personal changes outside the markers) -->
+<!-- first-pass:profile:start v0.8.0 (the default profile, managed by the setup-first-pass skill; put personal changes outside the markers) -->
 
 ## How the user works (profile)
 
@@ -61,7 +61,8 @@ or history, and may be tired. Casual, plain English that a 15-year-old follows o
 - Comments explain non-obvious intent, trade-offs or constraints only: no narrating
   comments, no "changed this to fix X", no reasoning left in the code.
 - A lint or type error introduced is fixed before reporting done.
-- Where the tool has file tools, file work uses them, not `cat`, `sed` or heredocs; the
+- Where the tool has file tools, file work uses them, not `cat`, `sed` or heredocs (an env file that holds keys is the
+  exception: the Secrets rule says how it is read); the
   shell is for shell work. Todo lists only for real multi-step work, and none left open at
   the end of a turn, except the task's scope, harm waiting in a batch or for the user's answer, full checks still to run, and a question that still matters and the user
   has not answered yet, asked or not.

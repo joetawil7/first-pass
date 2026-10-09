@@ -44,6 +44,9 @@ export function posix(p) {
   return p.replace(/\\/g, '/');
 }
 
+// `\\host\share` and `//host/share`: looking one up makes Windows contact that host.
+export const isNetworkPath = (p) => /^[\\/]{2}/.test(p);
+
 export function relative(from, to) {
   return posix(path.relative(from, to)) || '.';
 }

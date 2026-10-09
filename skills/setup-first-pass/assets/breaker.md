@@ -38,13 +38,32 @@ your context. For each repo the change touches (`git -C <file's folder> rev-pars
 
 - Read its `CLAUDE.md` or `AGENTS.md` (and the files it imports), especially its
   `first-pass:project` block: CI's checks, how to run one test, the real tests, test limits,
-  heavy-run rules, where its words live, the same job done in two places.
+  heavy-run rules, local runs that reach real people, where its words live, the same job done
+  in two places.
 - Read its `INVARIANTS.md` if it has one.
 - Read the main folder's `AGENTS.md` or `CLAUDE.md` if the repo sits in one: it lists the
-  repos, which depends on which, and machine rules for heavy runs.
+  repos and which depends on which. Read the machine block too (`first-pass:machine`, in that
+  file or the user's `~/.claude/CLAUDE.md`): how this machine bounds a heavy run, and what it
+  can look at a UI with.
 
-A repo's test limits and heavy-run rules bind you too. Run git and test commands inside the
-repo (`git -C <repo>`, `cd <repo>`), never from the folder above it.
+A repo's test limits and heavy-run rules, and the machine block's limits, bind you too, and you
+start a heavy run only where the machine block's heavy-run answer is a standing yes: you can't
+ask. A local run that reaches real people (email, SMS, push, payments, publishing) you start only
+when it runs with the keys and switches the repo's section lists set, setting them stops it, and
+the section does not say it needs a yes. Setting them stops it only when nothing in the run puts the real ones back: an env file its own
+commands load, an app built with the real ones, or a server it talks to but did not start (a test runner may reuse one already running:
+Playwright's `reuseExistingServer`). An env file that holds keys is never opened with a file tool, printed, or searched with a
+command that prints its lines: check it with `grep -cE` or `grep -lE` and a pattern of the names
+(`'^[[:space:]]*(export[[:space:]]+)?(NAME_A|NAME_B)[[:space:]]*[=:]'`), which print only a
+count or a file name; make a copy without those names with `grep -vE '<that pattern>' <file> >
+<copy>`, then check the copy the same way. A search across a repo skips env files
+(`--exclude='.env*'`). In a repo whose "Local runs that reach real people" line says
+"unknown", that has no such line, or that has no first-pass section, any server, worker or
+end-to-end or integration run counts as one, so you don't start it there, and you say what you
+didn't run. There, format and lint checks (never a command that rewrites files), typecheck and
+unit tests you may still run within the repo's test limits, unless its section names them as
+reaching real people; a build only where the machine block's heavy-run answer is a standing yes.
+Run git and test commands inside the repo (`git -C <repo>`, `cd <repo>`), never from the folder above it.
 
 ## How to look
 
@@ -84,7 +103,9 @@ repo (`git -C <repo>`, `cd <repo>`), never from the folder above it.
    evidence. Say so.
 
 You may run read-only commands and the repo's existing tests, within its limits. If the brief
-names ports, databases or suites the author is using meanwhile, leave them alone. Never
+names ports, databases or suites the author is using meanwhile, leave them alone, and start no
+more heavy runs than it says you may; when it says nothing and the machine block limits how
+many heavy runs go at once, start none, and say what you did not run. Never
 edit source files, commit, push, or stop processes you did not start.
 
 ## What counts

@@ -9,7 +9,8 @@ Walk every step. A step you cannot do goes in the report under "Not verified" wi
 reason; it is never skipped silently. The repo's commands, test limits and heavy-run rules
 are in the `first-pass:project` block of its instruction file (AGENTS.md or CLAUDE.md); if
 there is none, read them from the CI config and say so in the report. Its test limits bind
-every step below.
+every step below, and so do the machine block's limits (how this machine bounds a heavy run,
+and the browsers and devices it can look at a UI with).
 
 Run everything inside the repo that changed (`cd <repo>`, `git -C <repo>`), not from a main
 folder above it. A change that spans repos walks the steps once per repo.
@@ -63,7 +64,8 @@ For each behaviour the change adds or fixes, and each pre-mortem answer of the "
    looks like a new repo to every tool that scans it), under a name no parallel session
    will pick.
    Copy in only the new or changed test files, install dependencies as CI does, run them,
-   and record which fail and why. Then copy in the change and record that they pass. A test
+   and record which fail and why. A run here that could reach real people follows step 4's
+   first paragraph, env files included. Then copy in the change and record that they pass. A test
    that passes on the old code proves nothing about the change: rewrite it.
 3. **Guards** (tests that behaviour which must not change still holds) pass on both. Say
    which tests are guards.
@@ -72,6 +74,14 @@ For each behaviour the change adds or fixes, and each pre-mortem answer of the "
    outside call time out or return a 5xx.
 5. **Tests assert what the user sees or what is stored**, not only that a new test id
    exists or that a mock was called.
+6. **Look at the UI running.** A change to what a screen shows or how it behaves is opened
+   with the repo section's UI check and the browsers and devices the machine block names: the
+   web at a desktop and a phone width, a native app on each device class it ships to, in the
+   states the change touches. Save the screenshots outside the repo and list their paths.
+   With no way on this machine, say "Not checked: the UI was not looked at running", why, and
+   what to install to look (the machine block's "Missing:" line, or the tool's current docs);
+   install it only with the user's yes. A run here that could reach real people (a dev server, an
+   app, or a UI check that may reuse a server already running) follows step 4's first paragraph.
 
 ## 3. Fresh review
 
@@ -86,9 +96,10 @@ Start it in the background and don't wait for it: while it runs, do what reads o
 does not edit the files under review: steps 4 to 7 (CI's checks in the clean checkout,
 monitoring, words, invariants) and a draft of the report. Edits wait for the review (a fix
 found meanwhile joins its fixes), so the reviewer never reads a tree that is changing. Only
-runs the repo's test limits allow beside the review go at the same time: tell the reviewer
-which ports, databases and suites the session will use while it runs, so it leaves them
-alone. Until the review's result is in and handled, every reply says built, not done, and
+runs the repo's test limits and the machine block's limit on heavy runs at once allow beside
+the review go at the same time, counting the reviewer's own: tell the reviewer which ports,
+databases and suites the session will use while it runs, so it leaves them alone, and how
+many heavy runs it may start meanwhile. Until the review's result is in and handled, every reply says built, not done, and
 what it waits on; nothing of the change is committed to the user's branch, pushed or merged,
 unless the user says to ship it as it is (commits in a temp clone made for a review are
 fine); and either way it is not called done. Any edit CI's clean checkout does not hold (a
@@ -189,7 +200,27 @@ real-harm fix always gets step 2 as written. Delete the findings file when done.
 In the step 2 worktree with the whole change copied in, run exactly the commands CI runs
 (format, lint, typecheck, build, unit tests, integration and end-to-end tests the change
 touches; the whole integration suite when the change touches jobs, payments, publishing,
-deletion or auth). Follow the project's rules for heavy runs.
+deletion or auth). Follow the machine block and the repo's section for heavy runs; a local run
+that reaches real people waits for the user's yes, unless it runs with the keys and switches its
+section lists set, setting them stops it, and the section does not say it needs a yes; in a repo whose real-people line says "unknown" or is missing, or that has no
+first-pass section, servers, workers and end-to-end or integration runs wait for the user's yes,
+whatever keys are set. A yes for a run that reaches real people covers that one run: a rerun,
+after a fix or for the full checks, asks again. The keys and switches stop a run only when
+nothing in it puts the real ones back, so such a run also waits for the yes unless each of
+these holds (every env file below is checked and copied as the Secrets rule says: no value is
+read into the session or printed, and a copy goes from the filter straight into its file):
+
+- no real env file that holds one of those keys or switches is in the worktree while it goes
+  (one copied in for an earlier run included); it gets what else it needs from a copy with
+  those keys and switches taken out (made, then checked, as the Secrets rule says), or a
+  recipe's `envFile` keys;
+- its commands load no env file themselves (`env-cmd`, dotenv with `override`, `set -a;
+  . <file>`, a compose `env_file`) that sets one of them;
+- a public-prefixed one among them (`NEXT_PUBLIC_`, `VITE_`, `EXPO_PUBLIC_` and the like) is
+  empty in the build of the app it serves too, since a build bakes it in;
+- it starts every server it talks to: never one already running (the user's own dev server,
+  loaded with the real keys); where its config would reuse one (Playwright's
+  `reuseExistingServer`), make it start its own.
 
 When the repo has `.first-pass/parts.json`, run them with first-pass's parts runner:
 `node "${CLAUDE_SKILL_DIR}/../../scripts/cli.mjs" parts <repo> <worktree> <run-name> all`, where
@@ -197,20 +228,35 @@ When the repo has `.first-pass/parts.json`, run them with first-pass's parts run
 from the worktree) and `<run-name>` is lowercase letters and digits, new for each worktree. It
 runs the recipe's stages in order and each stage's parts side by side, each with its own port,
 its own run-named databases and its own logs, and through the main folder's `partWrapper` when
-it has one (the machine's memory cap: start the runner itself directly, never inside that cap).
+it has one (the machine's memory cap, which setup copies from the machine block: with a
+`partWrapper`, start the runner itself directly, never inside that cap; without one, see below).
 A later edit reruns only the parts it can affect, named instead of `all`; a part refuses to run
 while a part it needs has not passed on that worktree with the same inputs. `parts <repo> check`
 lists the parts. It prints its logs folder at the start and the end: read `summary.txt` there, and
 the log of each step that failed. A stopped run cleans up after itself; one killed outright is
 cleaned up by the next run of that part on the same run name.
 
+Step 4's first paragraph, on runs that reach real people, holds for each part. Before `all`,
+read the recipe: a part that starts a server, a worker or an end-to-end or integration run without the
+keys and switches the repo's section lists set in its `env`, or whose steps' or server's own
+`env` (applied after the part's, so it wins) sets one of them, or that reads one of them
+through its `envFile`, waits for the user's yes, and so does every such part in a repo whose real-people
+line says "unknown" or is missing, whatever the recipe sets; a part that builds what such a
+part serves counts as the build it serves. Run the other parts by name meanwhile, and pass
+what a run needs, never one of those keys, through the recipe's `envFile` keys. When the
+machine block limits how many heavy runs go at once, run the parts by name, one stage at a time
+and within that limit, instead of `all`. When the machine block names a wrapper but `parts <repo>
+check` says "no partWrapper" (one repo with no main folder, or a main folder set up before the
+wrapper), run each part by name, one at a time, inside that wrapper, as every heavy run goes;
+never `all` uncapped.
+
 A failure that also happens on the base without the change is pre-existing: name the test
 and move on. A failure the change caused gets a fix; a fix that is more than small goes
 back to step 3, reviewed like a fix for real harm. The fix reruns the part that failed and
 the checks it can affect, and the full checks run once more on the final change, as step 3
 says. Keep the worktree until those final full checks pass; then remove it
-(`git -C <repo> worktree remove --force <path>`) and any leftovers, including copied env
-files.
+(`git -C <repo> worktree remove --force <path>`) and any leftovers, including env files copied
+in for runs that send nothing.
 
 ## 5. Monitoring
 
@@ -241,6 +287,7 @@ review.
 <What changed, one plain line: what the user can now do or will notice>
 Verified: <what was run and how much of it, said plainly> → <result>, one line each (the test that failed before and passes now, with pass and fail counts; CI's checks)
 Full checks on the final change: <passed, with counts (failures the base has too named) | still to run: which checks ran on the latest edit, and how long the full checks take>
+UI looked at running: <the screens, widths or devices, and the screenshot paths | Not checked: why>
 Fresh review: <what the second reviewer found: n fixed, n disputed, n on the list>
 To pick: <real harm left for the user's answer first, then the smaller and older findings, numbered, each with its worst case and who meets it>
 Outside this task: <real harm seen in passing outside the scope, one line each with file:line>
