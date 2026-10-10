@@ -263,6 +263,21 @@ test('a question waits until nothing else can move, and no work is built on a gu
   assert.match(read('skills/setup-first-pass/assets/profile-block.md'), /none left open at the end of a turn, except the task's scope, harm waiting in a batch or for the user's answer, full checks still to run, and a question that still matters and the user has not answered yet, asked or not/, 'the profile keeps the scope, batched harm, the final full checks and open questions across turns');
 });
 
+test('an explanation asked for is simple and has an example, and an open question keeps what each answer does', () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\s+/g, ' ');
+  const profile = read('skills/setup-first-pass/assets/profile-block.md');
+  assert.match(profile, /\*\*When the user asks for an explanation, or seems lost\*\* \("explain", "what do you mean", "what\?", "I don't get it", a question about something just said\)/, 'an explicit "explain" counts, not only being lost');
+  assert.match(profile, /Then explain it simply, from the start, for a 15-year-old: the situation in a line or two, one real example from the work, and what actually happens in each case \(a table when there are options\), in common everyday words, naming only what the Everyday words bullet allows\./, 'the explanation has a shape, and keeps every name the Everyday words bullet lets through');
+  assert.match(profile, /That reply is not held to Short's limits; when it is itself a report the rules or a skill lay out, it keeps every line they require\./, 'the length cap gives way; only a reply that is itself a report keeps a report\'s lines');
+  assert.match(profile, /\*\*Everyday words, short sentences, one idea each\.\*\*/, 'the bullet the explanation points to for names still exists');
+  assert.match(profile, /a rule or skill asks for it \(file:line, a command to re-run\)/, 'and still lets through the names the rules need');
+  assert.match(profile, /\*\*Short\.\*\* Under 150 words and at most 5 bullets/, 'the limits the explanation is freed from still exist');
+  assert.doesNotMatch(profile, /the user's own included/, 'the default profile claims no precedence over a user\'s own rules (they go outside the markers)');
+  assert.match(profile, /Later replies go back to short, but a question still open says in a line what each answer would do every time it is asked again, even when an earlier reply said it, and the task list's copy of it says that too\./, 'a question asked again keeps what each answer does');
+  assert.doesNotMatch(profile, /with an example, and go back to short\./, 'going back to short no longer drops what an open question means');
+});
+
 test('work stays inside the task scope, and only hulk lifts it', () => {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
   const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\s+/g, ' ');
