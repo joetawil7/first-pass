@@ -144,7 +144,8 @@ Sort each finding by its worst case, never by the severity the reviewer gave it:
   context cannot lose it.
 - **Smaller: list it.** Real, but none of the above: words wrong in some state, a button that
   shows when it does nothing, a clumsier path. Don't fix it, and don't ask the user about it
-  during the work: put it on the item's list with its worst case and who meets it.
+  during the work: put it on the item's list with its worst case, who meets it and what
+  fixing it would change.
 - **Disagree:** say why in the report, with file:line.
 - **Older** (inside the task's scope, but the change neither caused it nor made it worse): on
   the list, marked as older than the change, whatever its harm; a real harm among them is
@@ -158,8 +159,8 @@ A fix that touches code another item in the same prompt uses gets its review on 
 diff. Say after each review what it found and what is left ("item 1: review of the fix found
 no new real harm; 3 on the list"), so it survives a compacted context.
 
-The list goes to the user once, at the end (step 8), numbered, each with its worst case and
-who meets it, with one question: which to fix. The fixes they pick are built together, with
+The list goes to the user once, at the end (step 8), numbered, each with its worst case, who
+meets it and what fixing it would change, with one question: which to fix. The fixes they pick are built together, with
 the proof step 2 asks for (or the one the Jev judge picks, below), and get one review
 together. That review's real harm is fixed as above; its smaller findings go on a new list
 in that report, not fixed unasked.
@@ -289,7 +290,7 @@ Verified: <what was run and how much of it, said plainly> → <result>, one line
 Full checks on the final change: <passed, with counts (failures the base has too named) | still to run: which checks ran on the latest edit, and how long the full checks take>
 UI looked at running: <the screens, widths or devices, and the screenshot paths | Not checked: why>
 Fresh review: <what the second reviewer found: n fixed, n disputed, n on the list>
-To pick: <real harm left for the user's answer first, then the smaller and older findings, numbered, each with its worst case and who meets it>
+To pick: <real harm left for the user's answer first, then the smaller and older findings, numbered, each with its worst case, who meets it and what fixing it would change>
 Outside this task: <real harm seen in passing outside the scope, one line each with file:line>
 Not verified: <each thing, and why>
 Not handled, because: <each, from the pre-mortem>

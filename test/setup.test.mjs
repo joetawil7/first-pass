@@ -274,8 +274,26 @@ test('an explanation asked for is simple and has an example, and an open questio
   assert.match(profile, /a rule or skill asks for it \(file:line, a command to re-run\)/, 'and still lets through the names the rules need');
   assert.match(profile, /\*\*Short\.\*\* Under 150 words and at most 5 bullets/, 'the limits the explanation is freed from still exist');
   assert.doesNotMatch(profile, /the user's own included/, 'the default profile claims no precedence over a user\'s own rules (they go outside the markers)');
-  assert.match(profile, /Later replies go back to short, but a question still open says in a line what each answer would do every time it is asked again, even when an earlier reply said it, and the task list's copy of it says that too\./, 'a question asked again keeps what each answer does');
+  assert.match(profile, /Later replies go back to short, but a question still open says what each answer would do, one line per answer, every time it is asked again, even when an earlier reply said it, and the task list's copy of it says that too\./, 'a question asked again keeps what each answer does, one line each, as the options bullet asks');
   assert.doesNotMatch(profile, /with an example, and go back to short\./, 'going back to short no longer drops what an open question means');
+});
+
+test('a question asked as options is explained in the reply before the options', () => {
+  const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const read = (p) => fs.readFileSync(path.join(root, p), 'utf8').replace(/\s+/g, ' ');
+  const profile = read('skills/setup-first-pass/assets/profile-block.md');
+  const bullet = /- \*\*Explain before the options\.\*\* A question the user answers by picking an option \(a picker such as Claude Code's AskUserQuestion, or numbered lines\) is explained in the reply's own text before the options appear: what is being decided and what each answer would do, one line per answer, and those lines are not cut to fit Short's limits\. A picker's labels and descriptions never carry the explanation alone; numbered lines in the reply may be those lines, each saying its own effect\. - /;
+  assert.match(profile, bullet, 'the explanation comes in the reply, before the picker, one line per answer that Short does not cut, in one bullet');
+  const at = profile.search(bullet);
+  const endWith = profile.indexOf('- **End with what only the user can do or decide**');
+  assert.ok(endWith !== -1, 'the bullet it follows still exists');
+  assert.ok(at > endWith && at < profile.indexOf('### Code'), 'it sits under Replies, after the bullet on what the user must decide');
+  assert.match(profile, /- \*\*Short\.\*\* Under 150 words and at most 5 bullets, unless the user asked for detail \("why", "explain", a full list\)\. Hold back detail and say it is there, never a risk, a failure or something the user must decide\. A report the rules or a skill lay out, and anything a subagent returns, keeps every line they require; the limit applies to the rest\. - /, 'the limits it is freed from still exist, whole and unchanged');
+  assert.match(read('skills/ship-check/SKILL.md'), /put it on the item's list with its worst case, who meets it and what fixing it would change\./, 'a small finding is written down with what fixing it would change when it is found');
+  assert.doesNotMatch(profile, /\*\*Explain first/, 'the lead never reads as "put this first", ahead of bad news');
+  const ship = read('skills/ship-check/SKILL.md');
+  assert.match(ship, /numbered, each with its worst case, who meets it and what fixing it would change, with one question: which to fix\./, 'the end list says what each fix would change');
+  assert.match(ship, /To pick: .*numbered, each with its worst case, who meets it and what fixing it would change>/, 'and so does the report line');
 });
 
 test('work stays inside the task scope, and only hulk lifts it', () => {
