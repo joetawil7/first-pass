@@ -349,7 +349,8 @@ Cleanup: <review root removed; your checkouts as they were, or what differs>
 
 ## 8. Offer fixes
 
-End with the fixable findings numbered, and ask which to fix. With checks still running,
+End with the fixable findings numbered, each with what fixing it would change, and ask which
+to fix. With checks still running,
 also offer to check back on them and on new comments (reading only). None is fixed without
 that answer. A change whose code may not run (a fork or an outside author) needs a
 separate yes to run it; picking a fix is not that yes. For each one chosen:

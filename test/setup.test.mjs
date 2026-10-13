@@ -274,7 +274,8 @@ test('an explanation asked for is simple and has an example, and an open questio
   assert.match(profile, /a rule or skill asks for it \(file:line, a command to re-run\)/, 'and still lets through the names the rules need');
   assert.match(profile, /\*\*Short\.\*\* Under 150 words and at most 5 bullets/, 'the limits the explanation is freed from still exist');
   assert.doesNotMatch(profile, /the user's own included/, 'the default profile claims no precedence over a user\'s own rules (they go outside the markers)');
-  assert.match(profile, /Later replies go back to short, but a question still open says what each answer would do, one line per answer, every time it is asked again, even when an earlier reply said it, and the task list's copy of it says that too\./, 'a question asked again keeps what each answer does, one line each, as the options bullet asks');
+  assert.match(profile, /Later replies go back to short, but a question still open says what each answer would do, one line per answer, every time it is asked again, even when an earlier reply said it, and the task list's one-line copy of it names what each answer would do too\./, 'a question asked again keeps what each answer does, one line each, as the options bullet asks');
+  assert.match(read('skills/setup-first-pass/assets/rules-block.md'), /Write each question you hold back in one line when it comes up/, 'the rules\' one-line task-list copy, which the profile\'s copy matches');
   assert.doesNotMatch(profile, /with an example, and go back to short\./, 'going back to short no longer drops what an open question means');
 });
 
@@ -294,6 +295,7 @@ test('a question asked as options is explained in the reply before the options',
   const ship = read('skills/ship-check/SKILL.md');
   assert.match(ship, /numbered, each with its worst case, who meets it and what fixing it would change, with one question: which to fix\./, 'the end list says what each fix would change');
   assert.match(ship, /To pick: .*numbered, each with its worst case, who meets it and what fixing it would change>/, 'and so does the report line');
+  assert.match(read('skills/review/SKILL.md'), /End with the fixable findings numbered, each with what fixing it would change, and ask which to fix\./, 'the review skill\'s list says it too');
 });
 
 test('work stays inside the task scope, and only hulk lifts it', () => {

@@ -1,4 +1,4 @@
-<!-- first-pass:profile:start v0.8.2 (the default profile, managed by the setup-first-pass skill; put personal changes outside the markers) -->
+<!-- first-pass:profile:start v0.8.3 (the default profile, managed by the setup-first-pass skill; put personal changes outside the markers) -->
 
 ## How the user works (profile)
 
@@ -48,8 +48,8 @@ or history, and may be tired. Casual, plain English that a 15-year-old follows o
   words bullet allows. That reply is not held to Short's limits; when it is itself a report
   the rules or a skill lay out, it keeps every line they require. Later replies go back to
   short, but a question still open says what each answer would do, one line per answer,
-  every time it is asked again, even when an earlier reply said it, and the task list's copy
-  of it says that too.
+  every time it is asked again, even when an earlier reply said it, and the task list's
+  one-line copy of it names what each answer would do too.
 - Bold headlines only when a reply covers separate topics; they name the topic.
 - Never: a preamble ("Let me...", "Great question"), a recap of work the user watched,
   restating the question, "Here's what I found:", a closing summary, selling the work
