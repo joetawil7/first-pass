@@ -189,7 +189,7 @@ export function checkTests(recipe, checkout, specs = []) {
     }
     if (!recipe.parts.get(group[0]).takesTests) throw new PartsError(`--tests: ${name}'s steps take no test list (none has {{tests}} in its "run")`);
     if (tests.has(name)) throw new PartsError(`--tests names ${name} twice: give its files in one list`);
-    const files = spec.slice(at + 1).split(',').map((f) => f.trim().replace(/\\/g, '/')).filter(Boolean);
+    const files = spec.slice(at + 1).split(',').map((f) => f.trim().replace(/\\/g, '/')).filter(Boolean).map((f) => path.posix.normalize(f));
     const first = recipe.parts.get(group[0]);
     const stepDirs = [...new Set(first.steps.filter((st) => placeholders(st.run).includes('tests')).map((st) => path.posix.normalize((st.cwd ?? first.cwd ?? '.').replace(/\\/g, '/')).replace(/\/$/, '')))].filter((d) => !d.includes('{{'));
     if (!files.length) throw new PartsError(`--tests: ${name} has no test files`);
@@ -197,7 +197,7 @@ export function checkTests(recipe, checkout, specs = []) {
       // Every part of the path, since a step's folder can turn "src/-u" into "-u".
       if (file.split('/').some((seg) => seg.startsWith('-'))) throw new PartsError(`--tests: "${file}" has a part that starts with "-", so a test runner could read it as an option`);
       if (file.startsWith('/') || /^[A-Za-z]:/.test(file)) throw new PartsError(`--tests: "${file}" must be relative to the checkout`);
-      if (!TEST_PATH.test(file)) throw new PartsError(`--tests: "${file}" may hold only letters, digits and . _ @ - /: run ${name} whole for it`);
+      if (!TEST_PATH.test(file)) throw new PartsError(`--tests: "${file}" may hold only a-z, A-Z, 0-9 and . _ @ - / (a test runner reads others as a pattern), so run ${name} whole for it`);
       if (file.split('/').includes('..')) throw new PartsError(`--tests: "${file}" must stay inside the checkout`);
       if (!fs.existsSync(path.join(checkout, file))) throw new PartsError(`--tests: ${file} is not in the checkout`);
       // Outside the step's folder it would reach the runner as "../..", a pattern that finds nothing.

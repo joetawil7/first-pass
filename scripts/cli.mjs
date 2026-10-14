@@ -190,7 +190,10 @@ const positional = [];
 const options = { '--sessions': [], '--count': [], '--delete': [], '--tests': [] };
 for (let i = 1; i < args.length; i++) {
   if (args[i] === '--ci') ciNames.push(args[++i] ?? 'all');
-  else if (Object.hasOwn(options, args[i])) {
+  else if (args[i].startsWith('--') && args[i].includes('=') && Object.hasOwn(options, args[i].slice(0, args[i].indexOf('=')))) {
+    const at = args[i].indexOf('=');
+    options[args[i].slice(0, at)].push(args[i].slice(at + 1));
+  } else if (Object.hasOwn(options, args[i])) {
     if (i + 1 >= args.length) throw new Error(`${args[i]} needs a value`);
     options[args[i]].push(args[++i]);
   } else if (args[i].startsWith('--')) flags.push(args[i]);

@@ -776,18 +776,18 @@ test('chosen tests are refused unless each is a safe path in the checkout, for a
   const refused = [
     // Test runners read these as patterns, where brackets, "+" and (in some versions) a space stop
     // the path matching itself; the part then runs whole.
-    ['e2e=src/(auth)/a.ts', /may hold only letters, digits and \. _ @ - \/: run e2e whole for it/],
-    ['e2e=src/[id]/a.ts', /only letters, digits/],
-    ['e2e=src/a+b.ts', /only letters, digits/],
-    ['e2e=src/a b.ts', /only letters, digits/],
+    ['e2e=src/(auth)/a.ts', /may hold only a-z, A-Z, 0-9 and \. _ @ - \/ \(a test runner reads others as a pattern\), so run e2e whole for it/],
+    ['e2e=src/[id]/a.ts', /may hold only a-z, A-Z, 0-9/],
+    ['e2e=src/a+b.ts', /may hold only a-z, A-Z, 0-9/],
+    ['e2e=src/a b.ts', /may hold only a-z, A-Z, 0-9/],
     // A file outside the step's folder reaches the runner as "../..", a pattern that finds nothing.
     ['web=.gitignore', /\.gitignore is outside the folder web's tests run in \(src\): give it to the part that runs it, or run web whole/],
     ['e2e=src/-u', /starts with "-"/],
-    ['e2e=src/a.ts;calc', /only letters, digits/],
-    ['e2e=src/a.ts&calc', /only letters, digits/],
-    ['e2e="src/a.ts"', /only letters, digits/],
-    ['e2e=src/%PATH%', /only letters, digits/],
-    ['e2e=src/$(id)', /only letters, digits/],
+    ['e2e=src/a.ts;calc', /may hold only a-z, A-Z, 0-9/],
+    ['e2e=src/a.ts&calc', /may hold only a-z, A-Z, 0-9/],
+    ['e2e="src/a.ts"', /may hold only a-z, A-Z, 0-9/],
+    ['e2e=src/%PATH%', /may hold only a-z, A-Z, 0-9/],
+    ['e2e=src/$(id)', /may hold only a-z, A-Z, 0-9/],
     ['e2e=../outside.ts', /inside the checkout/],
     ['e2e=src/../../outside.ts', /inside the checkout/],
     [`e2e=${f.co.replace(/\\/g, '/')}/src/a.ts`, /relative to the checkout/],
@@ -804,6 +804,7 @@ test('chosen tests are refused unless each is a safe path in the checkout, for a
   const tests = checkTests(recipe, f.co, ['e2e=src\\a.ts, src/b.ts ']);
   assert.deepEqual(tests.get('e2e'), ['src/a.ts', 'src/b.ts']);
   assert.deepEqual(checkTests(recipe, f.co, ['web=src/a.ts']).get('web'), ['src/a.ts']);
+  assert.deepEqual(checkTests(recipe, f.co, ['web=./src/a.ts']).get('web'), ['src/a.ts'], 'a ./ path is the same file');
   assert.throws(() => selectParts(recipe, ['prep'], tests), /this run does not run e2e/);
   f.cleanup();
 });
@@ -849,6 +850,9 @@ test('the CLI passes --tests to the part, says which parts take them, and exits 
   assert.match(ran.stdout, /=== e2e passed \(chosen tests only\)/);
   assert.deepEqual(argsOut(f), ['src/a.ts']);
   assert.equal(cli(f.repo, f.co, f.run, 'e2e', '--tests', 'e2e=src/nope.ts').status, 2);
+  const eq = cli(f.repo, f.co, f.run, 'e2e', '--tests=e2e=src/b.ts');
+  assert.equal(eq.status, 0, eq.stdout + eq.stderr);
+  assert.deepEqual(argsOut(f), ['src/b.ts'], 'the --tests=<value> form works too');
   fs.rmSync(logsDir(f.repo, f.run), { recursive: true, force: true });
   f.cleanup();
 });

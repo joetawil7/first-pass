@@ -50,9 +50,11 @@ each part whose steps take a test list (`parts <repo> check` says `takes --tests
 chosen files with `--tests <part>=<file>,<file>`, the other chosen parts run whole by name, and
 nothing runs by hand outside it. A chosen file the runner refuses (a path a test runner would
 read as a pattern, or one outside the folder the part's tests run in) means that part runs
-whole, never that the file is left out. After a run, check that each chosen file shows in that
-part's log (Jest's PASS and FAIL lines, node --test's file names, Playwright's list of files):
-one that does not, did not run. A run that selects no tests is not a pass: fix the selection, or run that part
+whole, never that the file is left out. After a run, check that each chosen file shows in the
+test runner's own result lines in that part's log, named from the folder the runner ran in and
+with either slash (Jest's PASS and FAIL lines, Playwright's lines for that file, the names of
+node --test's tests from it), never in the command line pnpm or npm repeats above them: one that
+does not, did not run. A run that selects no tests is not a pass: fix the selection, or run that part
 whole. When unsure whether a test reaches the change, it runs. Everything else, test files that
 reach nothing the change touched, is not run here.
 
