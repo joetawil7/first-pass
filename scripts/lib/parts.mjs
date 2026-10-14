@@ -19,7 +19,12 @@ const RUN_NAME = /^[a-z0-9]+$/;
 const PART_NAME = /^[a-z0-9][a-z0-9-]*$/;
 // The server probe stays on this machine (the plugin's scripts make no network call).
 const LOCAL_URL = /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+|:\{\{port\}\})?(\/|$)/;
-const VARS = ['run', 'shard', 'shards', 'port', 'checkout', 'repo', 'logs'];
+const VARS = ['run', 'shard', 'shards', 'port', 'checkout', 'repo', 'logs', 'tests'];
+// A chosen test file goes into a shell command in double quotes, and test runners (Jest,
+// Playwright, node --test) read it as a pattern: these are the characters both sh and cmd.exe leave
+// as they are, and that still match the path itself (brackets, "+" and, in some Playwright
+// versions, a space would not).
+const TEST_PATH = /^[A-Za-z0-9._@\-/]+$/;
 const WRAPPER_VARS = ['name', 'memoryGB', 'timeoutMin', 'logs', 'repo', 'checkout', 'command', 'commandFile'];
 
 export class PartsError extends Error {}
@@ -122,7 +127,13 @@ export function loadRecipe(repo) {
       throw new PartsError(`part ${name}: "envFile" needs a "path" and a list of "keys"`);
     }
     if (def.inputs !== undefined && (!Array.isArray(def.inputs) || def.inputs.some((p) => typeof p !== 'string'))) throw new PartsError(`part ${name}: "inputs" is a list of paths`);
-    const known = new Set(['run', 'checkout', 'repo', 'logs', ...(shards ? ['shard', 'shards'] : []), ...(def.server ? ['port'] : [])]);
+    const known = new Set(['run', 'checkout', 'repo', 'logs', 'tests', ...(shards ? ['shard', 'shards'] : []), ...(def.server ? ['port'] : [])]);
+    const outsideRuns = strings({ ...def, steps: def.steps.map(({ run, ...rest }) => rest) });
+    if (outsideRuns.some((text) => placeholders(text).includes('tests'))) throw new PartsError(`part ${name}: {{tests}} goes only in a step's "run"`);
+    const takesTests = def.steps.some((step) => placeholders(step.run).includes('tests'));
+    // A list that selects no tests must fail, never pass as an empty run.
+    const unchecked = def.steps.find((step) => placeholders(step.run).includes('tests') && (typeof step.ran !== 'string' || !step.ran));
+    if (unchecked) throw new PartsError(`part ${name}: step ${unchecked.name} takes {{tests}}, so it needs "ran"`);
     for (const text of strings(def)) {
       for (const p of placeholders(text)) {
         if (!VARS.includes(p)) throw new PartsError(`part ${name}: {{${p}}} is not a placeholder (${VARS.join(', ')})`);
@@ -132,7 +143,7 @@ export function loadRecipe(repo) {
     const names = shards ? Array.from({ length: shards }, (_, i) => `${name}-${i + 1}`) : [name];
     names.forEach((n, i) => {
       if (parts.has(n)) throw new PartsError(`${file}: two parts are named ${n}`);
-      parts.set(n, { ...def, name: n, group: name, shard: shards ? i + 1 : null, shards: shards || null });
+      parts.set(n, { ...def, name: n, group: name, shard: shards ? i + 1 : null, shards: shards || null, takesTests });
     });
     groups.set(name, names);
   }
@@ -158,6 +169,57 @@ export function loadRecipe(repo) {
     }
   }
   return { file, parts, stages, groups, expand };
+}
+
+// The test files a run is given for a part (`--tests <part>=<file>,<file>`): each a path that
+// exists inside the checkout, for a part whose steps take {{tests}}. A sharded part takes them by
+// its own name, not a shard's.
+export function checkTests(recipe, checkout, specs = []) {
+  const tests = new Map();
+  if (!specs.length) return tests;
+  if (!fs.existsSync(checkout)) throw new PartsError(`${checkout} does not exist`);
+  for (const spec of specs) {
+    const at = spec.indexOf('=');
+    if (at < 1) throw new PartsError(`--tests takes <part>=<file>[,<file>...], not "${spec}"`);
+    const name = spec.slice(0, at);
+    const group = recipe.groups.get(name);
+    if (!group) {
+      const shard = recipe.parts.get(name);
+      throw new PartsError(shard ? `--tests: give the tests to ${shard.group}, not to one of its shards` : `--tests names "${name}", which is not a part`);
+    }
+    if (!recipe.parts.get(group[0]).takesTests) throw new PartsError(`--tests: ${name}'s steps take no test list (none has {{tests}} in its "run")`);
+    if (tests.has(name)) throw new PartsError(`--tests names ${name} twice: give its files in one list`);
+    const files = spec.slice(at + 1).split(',').map((f) => f.trim().replace(/\\/g, '/')).filter(Boolean);
+    const first = recipe.parts.get(group[0]);
+    const stepDirs = [...new Set(first.steps.filter((st) => placeholders(st.run).includes('tests')).map((st) => path.posix.normalize((st.cwd ?? first.cwd ?? '.').replace(/\\/g, '/')).replace(/\/$/, '')))].filter((d) => !d.includes('{{'));
+    if (!files.length) throw new PartsError(`--tests: ${name} has no test files`);
+    for (const file of files) {
+      // Every part of the path, since a step's folder can turn "src/-u" into "-u".
+      if (file.split('/').some((seg) => seg.startsWith('-'))) throw new PartsError(`--tests: "${file}" has a part that starts with "-", so a test runner could read it as an option`);
+      if (file.startsWith('/') || /^[A-Za-z]:/.test(file)) throw new PartsError(`--tests: "${file}" must be relative to the checkout`);
+      if (!TEST_PATH.test(file)) throw new PartsError(`--tests: "${file}" may hold only letters, digits and . _ @ - /: run ${name} whole for it`);
+      if (file.split('/').includes('..')) throw new PartsError(`--tests: "${file}" must stay inside the checkout`);
+      if (!fs.existsSync(path.join(checkout, file))) throw new PartsError(`--tests: ${file} is not in the checkout`);
+      // Outside the step's folder it would reach the runner as "../..", a pattern that finds nothing.
+      for (const dir of stepDirs) {
+        if (dir !== '.' && file !== dir && !file.startsWith(`${dir}/`)) throw new PartsError(`--tests: ${file} is outside the folder ${name}'s tests run in (${dir}): give it to the part that runs it, or run ${name} whole`);
+      }
+    }
+    tests.set(name, files);
+  }
+  return tests;
+}
+
+// The parts a run runs. A sharded part given chosen tests runs once, as its first shard (shard 1
+// of 1): a few files need no splitting, and a shard left with none would run no tests.
+export function selectParts(recipe, names, tests = new Map()) {
+  let chosen = names.includes('all') ? [...recipe.parts.keys()] : [...new Set(names.flatMap((n) => recipe.expand(n, 'the command')))];
+  for (const group of tests.keys()) {
+    const members = recipe.groups.get(group);
+    if (!members.some((n) => chosen.includes(n))) throw new PartsError(`--tests names ${group}, but this run does not run ${group}`);
+    if (members.length > 1) chosen = [...new Set([...chosen.filter((n) => !members.includes(n)), members[0]])];
+  }
+  return chosen;
 }
 
 // The part and every part it needs, directly or through others.
@@ -441,11 +503,11 @@ async function released(port) {
 }
 
 export class Runner {
-  constructor({ repo, checkout, run, recipe, wrapper = null, cli = null, out = (line) => console.log(line) }) {
+  constructor({ repo, checkout, run, recipe, tests = new Map(), wrapper = null, cli = null, out = (line) => console.log(line) }) {
     if (!RUN_NAME.test(run)) throw new PartsError('the run name is lowercase letters and digits (it goes into database names)');
     if (!fs.existsSync(checkout)) throw new PartsError(`${checkout} does not exist`);
     if (canonical(checkout) === canonical(repo)) throw new PartsError(`run it on a clean checkout, not the tree you work in (${repo})`);
-    Object.assign(this, { repo: path.resolve(repo), checkout: path.resolve(checkout), run, recipe, wrapper, cli, out });
+    Object.assign(this, { repo: path.resolve(repo), checkout: path.resolve(checkout), run, recipe, tests, wrapper, cli, out });
     this.logs = logsDir(repo, run);
     claimRun(this.logs, checkout);
     this.active = new Set();
@@ -475,6 +537,7 @@ export class Runner {
     for (const dep of needs) {
       const mark = marks[dep];
       if (!mark) return { why: `it needs ${dep}, which has not passed on this checkout: run ${dep} first`, seen };
+      if (mark.tests) return { why: `it needs ${dep}, which passed only for chosen tests: run ${dep} whole`, seen };
       if (mark.hash !== inputsHash(this.checkout, this.recipe.parts.get(dep).inputs)) return { why: `${dep}'s inputs changed since it passed: run ${dep} again`, seen };
       // A part rerun after this one passed (a new install) makes this one's result stale too.
       for (const [up, at] of Object.entries(mark.deps ?? {})) {
@@ -487,10 +550,11 @@ export class Runner {
   }
 
   // Written after the part passed, whole or not at all; the hash and deps are as they were when
-  // it started.
+  // it started. A run of chosen tests says so, so it never counts as the part's full pass.
   writeMark(part, hash, deps) {
     const file = this.markFile(part.name);
-    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ hash, at: new Date().toISOString(), deps }));
+    const tests = this.tests.get(part.group);
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ hash, at: new Date().toISOString(), deps, ...(tests ? { tests } : {}) }));
     fs.renameSync(`${file}.tmp`, file);
   }
 
@@ -499,7 +563,16 @@ export class Runner {
   }
 
   baseVars(part) {
-    return { run: this.run, checkout: this.checkout, repo: this.repo, logs: this.logs, shard: part.shard, shards: part.shards, port: null };
+    const once = part.shards && this.tests.has(part.group);
+    return { run: this.run, checkout: this.checkout, repo: this.repo, logs: this.logs, shard: once ? 1 : part.shard, shards: once ? 1 : part.shards, port: null };
+  }
+
+  // The chosen test files as the step's folder sees them, each in double quotes; none means the
+  // whole suite.
+  testsArg(part, cwd) {
+    const files = this.tests.get(part.group);
+    if (!files) return '';
+    return files.map((f) => `"${path.relative(cwd, path.join(this.checkout, f)).split(path.sep).join('/') || '.'}"`).join(' ');
   }
 
   // What an earlier run of this part left when it was killed before its own cleanup: its files and
@@ -554,7 +627,8 @@ export class Runner {
     const log = path.join(this.logs, `${part.name}-${step.name}.log`);
     fs.writeFileSync(log, '');
     const started = Date.now();
-    const child = start(fill(step.run, vars), { cwd: path.resolve(this.checkout, fill(step.cwd ?? part.cwd ?? '.', vars)), env: { ...env, ...this.fillEnv(step.env, vars) }, log });
+    const cwd = path.resolve(this.checkout, fill(step.cwd ?? part.cwd ?? '.', vars));
+    const child = start(fill(step.run, { ...vars, tests: kind ? '' : this.testsArg(part, cwd) }), { cwd, env: { ...env, ...this.fillEnv(step.env, vars) }, log });
     this.active.add(child);
     const left = deadline - Date.now();
     let timedOut = false;
@@ -607,6 +681,8 @@ export class Runner {
 
   async runPart(part) {
     this.note(`=== ${part.name} start (checkout ${this.checkout}, run ${this.run})`);
+    const chosenTests = this.tests.get(part.group);
+    if (chosenTests) this.note(`${part.name}: only the chosen tests: ${chosenTests.join(', ')}`);
     fs.mkdirSync(path.join(this.logs, 'marks'), { recursive: true });
     const partLock = path.join(this.logs, `${part.name}.lock`);
     if (!lock(partLock)) {
@@ -689,7 +765,7 @@ export class Runner {
         ok = false;
       } else this.writeMark(part, hash, deps);
     }
-    this.note(`=== ${part.name} ${ok && !this.stopping ? 'passed' : 'FAILED'}`);
+    this.note(`=== ${part.name} ${ok && !this.stopping ? (chosenTests ? 'passed (chosen tests only)' : 'passed') : 'FAILED'}`);
     return ok;
   }
 
@@ -699,7 +775,8 @@ export class Runner {
   async runWrapped(part) {
     fs.mkdirSync(path.join(this.logs, 'marks'), { recursive: true });
     fs.rmSync(this.markFile(part.name), { force: true });
-    const command = [process.execPath, this.cli, 'parts', this.repo, this.checkout, this.run, part.name, '--inner'].map((a) => `"${a.replace(/\\/g, '/')}"`).join(' ');
+    const tests = this.tests.get(part.group);
+    const command = [process.execPath, this.cli, 'parts', this.repo, this.checkout, this.run, part.name, '--inner', ...(tests ? ['--tests', `${part.group}=${tests.join(',')}`] : [])].map((a) => `"${a.replace(/\\/g, '/')}"`).join(' ');
     const commandFile = path.join(this.logs, `${part.name}.command`);
     fs.writeFileSync(commandFile, command + '\n');
     const vars = { name: part.name, memoryGB: part.memoryGB ?? 4, timeoutMin: (part.timeoutMin ?? 30) + 5, logs: this.logs, repo: this.repo, checkout: this.checkout, command, commandFile };
@@ -744,7 +821,8 @@ export class Runner {
     } finally {
       if (poll) clearInterval(poll);
     }
-    if (!inner) this.note(`=== ${ok && !this.stopping ? 'every part passed' : 'FAILED'}; summary.txt and each step's log are in ${this.logs}`);
+    const partly = this.tests.size ? ` (chosen tests only for ${[...this.tests.keys()].join(', ')})` : '';
+    if (!inner) this.note(`=== ${ok && !this.stopping ? `every part passed${partly}` : 'FAILED'}; summary.txt and each step's log are in ${this.logs}`);
     return ok && !this.stopping;
   }
 
@@ -774,7 +852,7 @@ export function describe(recipe) {
   return recipe.stages
     .map((stage, i) => `stage ${i + 1}: ${stage.map((n) => {
       const p = recipe.parts.get(n);
-      const bits = [p.needs.length && `needs ${p.needs.join(', ')}`, p.server && `server on ${p.server.ports.join('-')}`, `${p.memoryGB ?? 4} GB`, `${p.timeoutMin ?? 30} min`].filter(Boolean);
+      const bits = [p.needs.length && `needs ${p.needs.join(', ')}`, p.server && `server on ${p.server.ports.join('-')}`, `${p.memoryGB ?? 4} GB`, `${p.timeoutMin ?? 30} min`, p.takesTests && 'takes --tests'].filter(Boolean);
       return `${n} (${bits.join(', ')})`;
     }).join(', ')}`)
     .join('\n');

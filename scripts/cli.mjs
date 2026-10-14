@@ -20,9 +20,10 @@
 //   node cli.mjs jev ask harm|priority|proof <findings.json> <repo>
 //                                               Jev's verdict on each finding, as JSON ("rule" = decide by the rules)
 //   node cli.mjs parts <repo> check             the repo's CI parts (<repo>/.first-pass/parts.json), stage by stage
-//   node cli.mjs parts <repo> <checkout> <run-name> all|<part>...
+//   node cli.mjs parts <repo> <checkout> <run-name> all|<part>... [--tests <part>=<file>[,<file>...]]...
 //                                               runs them on a clean checkout, a stage's parts side by side,
-//                                               each through the main folder's "partWrapper" when it has one
+//                                               each through the main folder's "partWrapper" when it has one;
+//                                               --tests gives a part whose steps take {{tests}} only those files
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,7 +35,7 @@ import { drift } from './lib/drift.mjs';
 import { approval } from './lib/fingerprint.mjs';
 import { JEV_URL, configPath, judge, judgeFor, readFindings } from './lib/jev.mjs';
 import { repoHooksHash } from './lib/instructions.mjs';
-import { PartsError, Runner, checkWrapper, describe, loadRecipe } from './lib/parts.mjs';
+import { PartsError, Runner, checkTests, checkWrapper, describe, loadRecipe, selectParts } from './lib/parts.mjs';
 import { surveyWorkspace } from './lib/survey.mjs';
 import { countMatching, deleteWordsFile, projectsDir, readRecent, removeStaleWordsFiles, summary, writeWordsFile } from './lib/words.mjs';
 import { CONFIG_PATH, findWorkspace, loadWorkspace } from './lib/workspace.mjs';
@@ -151,9 +152,9 @@ async function jev([sub, ...rest]) {
   throw new Error('usage: node cli.mjs jev status [repo] | test <repo> | ask harm|priority|proof <findings.json> <repo>');
 }
 
-const PARTS_USAGE = 'usage: node cli.mjs parts <repo> check | parts <repo> <checkout> <run-name> all|<part>...';
+const PARTS_USAGE = 'usage: node cli.mjs parts <repo> check | parts <repo> <checkout> <run-name> all|<part>... [--tests <part>=<file>[,<file>...]]...';
 
-async function parts([repoArg, checkout, run, ...names], inner) {
+async function parts([repoArg, checkout, run, ...names], inner, testSpecs = []) {
   if (!repoArg || !checkout) throw new PartsError(PARTS_USAGE);
   const repo = path.resolve(repoArg);
   const recipe = loadRecipe(repo);
@@ -164,8 +165,9 @@ async function parts([repoArg, checkout, run, ...names], inner) {
     return 0;
   }
   if (!run || !names.length) throw new PartsError(PARTS_USAGE);
-  const chosen = names.includes('all') ? [...recipe.parts.keys()] : [...new Set(names.flatMap((n) => recipe.expand(n, 'the command')))];
-  const runner = new Runner({ repo, checkout: path.resolve(checkout), run, recipe, wrapper: inner ? null : wrapper, cli: fileURLToPath(import.meta.url) });
+  const tests = checkTests(recipe, path.resolve(checkout), testSpecs);
+  const chosen = selectParts(recipe, names, tests);
+  const runner = new Runner({ repo, checkout: path.resolve(checkout), run, recipe, tests, wrapper: inner ? null : wrapper, cli: fileURLToPath(import.meta.url) });
   const interrupted = () => {
     runner.note('stopping: interrupted');
     runner.stopAll();
@@ -185,7 +187,7 @@ const command = args[0];
 const flags = [];
 const ciNames = [];
 const positional = [];
-const options = { '--sessions': [], '--count': [], '--delete': [] };
+const options = { '--sessions': [], '--count': [], '--delete': [], '--tests': [] };
 for (let i = 1; i < args.length; i++) {
   if (args[i] === '--ci') ciNames.push(args[++i] ?? 'all');
   else if (Object.hasOwn(options, args[i])) {
@@ -224,7 +226,7 @@ if (command === 'survey') {
   }
 } else if (command === 'parts') {
   try {
-    process.exitCode = await parts(positional, flags.includes('--inner'));
+    process.exitCode = await parts(positional, flags.includes('--inner'), options['--tests']);
   } catch (error) {
     if (!(error instanceof PartsError)) throw error;
     console.error(error.message);

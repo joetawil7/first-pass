@@ -342,7 +342,9 @@ say in the report that Claude Code does not load it on its own.
   killed outright, the next run of that part runs them first), `memoryGB` (4) and `timeoutMin`
   (30). A field the runner does not know is refused, never ignored.
   `{{run}}` goes in every name two runs must not share (a database), `{{port}}` where the
-  server listens. Commands come from CI's files and the repo's test setup; a part CI gives a
+  server listens. `{{tests}}`, at the end of a test step's `run` where its test runner takes file
+  names, lets a run give that step chosen test files (`--tests`); it is empty in a full run, it
+  goes nowhere else, and a step that takes it needs `ran`, so a list that selects no tests fails. Commands come from CI's files and the repo's test setup; a part CI gives a
   service (a database) names the local one it uses, as the project block's services line
   says. A part that starts a server, a worker or an end-to-end or integration run sets, in its
   `env`, every key and switch the project block's "Local runs that reach real people" line says

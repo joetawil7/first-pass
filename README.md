@@ -29,7 +29,7 @@ only). You set it up once, in the folder that holds your repos.
   scope for one task, so it looks everywhere.
 - **Before "done",** a second agent that didn't write the code reviews it in a fresh
   context. "Done" needs a test that failed before the change and CI's checks passing in a
-  clean checkout; anything less is reported as built, not done.
+  clean checkout (or, with `/first-pass:quick`, the checks the change can affect); anything less is reported as built, not done.
 - **On a bug,** it fixes the whole class: it reproduces the bug, finds the same pattern in
   the task's scope, and adds the check that stops it coming back.
 - **On a pull request,** `/first-pass:review` checks your own branch before you ask for
@@ -103,7 +103,7 @@ first-pass names those checks, and asks for proof before anything is called done
   so the `breaker` agent reviews each change in a fresh context, starting from the other
   code paths that touch the same data.
 - **"Done" means a test that failed before the change**, the breaker's review, and CI's own
-  checks passing in a clean checkout. Short of that, it's reported as built, not done.
+  checks passing in a clean checkout (or, with `/first-pass:quick`, the checks the change can affect). Short of that, it's reported as built, not done.
 - **A UI change is looked at running** before it's called done: the web at a desktop and a
   phone width, an app on each device class it ships to, with the browsers, simulators and
   devices this machine has. Setup writes them down in the machine block, and for each UI
@@ -131,7 +131,8 @@ first-pass names those checks, and asks for proof before anything is called done
 | `review` | Reviews your own branch before you ask for review (type nothing after it), or a teammate's PRs, several repos at once. Checks the change against its ticket, judges the failed checks and every Bugbot comment, runs the breaker, traces the other code that uses what changed, proves each finding or marks it unproven, and says what the merge needs and how to check the deploy. Reads GitHub and never posts; pushes a fix only on your yes | Only when you type it |
 | `jev` | Sets up the optional Jev judge (TypeSafe's decision model), which `ship-check` asks whether a review finding is real harm, which small ones to fix now, and what proof a small fix needs | Only when you type it |
 | `hulk` | Lifts the task's scope for one task: searches, reviews and bug hunts go across the whole codebase, and problems found anywhere are handled as usual (for a pull request: `/first-pass:review hulk <what>`) | Only when you type it |
-| Parts runner | Runs CI's checks on your machine in the parts your repo's `.first-pass/parts.json` names (setup drafts it from CI): stages in order, a stage's parts side by side, each with its own port, run-named databases and logs, through your memory-capped runner if you named one (with one repo and no main folder, one part at a time inside it). It stops only what it started, and a part that needs another refuses to run until that one passed on the same checkout | When `ship-check` runs CI's checks |
+| `quick` | Quick mode, until `/first-pass:quick off`: instead of CI's full checks, a change runs format, lint, types, build, its own tests and every unit, integration, flow and browser test that reaches what it touched; the rest of the suite is left for a full run, such as your pull request's CI | Only when you type it |
+| Parts runner | Runs CI's checks on your machine in the parts your repo's `.first-pass/parts.json` names (setup drafts it from CI): stages in order, a stage's parts side by side, each with its own port, run-named databases and logs, through your memory-capped runner if you named one (with one repo and no main folder, one part at a time inside it). It stops only what it started, and a part that needs another refuses to run until that one passed on the same checkout; `--tests` runs only chosen test files in a part whose steps take them | When `ship-check` runs CI's checks |
 | Hooks | Run each repo's own hooks from the main folder, send back a "done" with no evidence, say what drifted at session start, and hold `sharpen`'s work until its rewrite is shown | Every session |
 
 ## If you keep all your repos in one folder
@@ -345,7 +346,9 @@ they help on your code.
   several items builds them all first, then reviews them while CI's full checks run in one
   clean checkout holding them all. A later fix reruns only the checks it can affect, and the
   full checks run once more on the final change: nothing is committed before them unless you
-  say to ship it as it is, and nothing is called done before they pass. During the work, only serious findings (money, data, something done twice or sent
+  say to ship it as it is, and nothing is called done before they pass. `/first-pass:quick`
+  trades the full checks for the ones the change can affect and leaves the rest of the suite
+  for a full run, such as your pull request's CI. During the work, only serious findings (money, data, something done twice or sent
   wrong, security, legal, a crash, stuck work, the change not doing its job) are fixed and
   checked again; those only a rare path reaches, found after the first review, are collected
   and fixed together in one batch with one review, and a rare one that batch's review or a later
@@ -361,7 +364,7 @@ they help on your code.
   more. So the agent first does every part that doesn't depend on your answer, then asks
   what's left in one set.
 - **It won't make code bug free.** The aim is fewer and smaller escapes: no high-severity
-  ones, no bug class found twice. This is version 0.8, so that's the design, not a measured
+  ones, no bug class found twice. This is version 0.9, so that's the design, not a measured
   result yet.
 - **Rules alone fade.** The fixes that last are the ones `fix-the-class` pushes toward: a
   shared helper that's the only way to do a thing, a database constraint, a CI check.

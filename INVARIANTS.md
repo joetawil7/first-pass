@@ -99,6 +99,7 @@ holds it today and where it is known to break.
    `scripts/lib/parts.mjs`; the recipe is read from the repo's
    own folder, never the checkout under test (`loadRecipe`); `test/parts.test.mjs`.
    A part run through a `partWrapper` passed only when that run wrote its mark (`runWrapped`);
+   a run of chosen tests (`--tests`, checked by `checkTests`) marks its pass as partial, and a part that needs it refuses until it runs whole (`writeMark`, `notReady`);
    a stopped run asks its wrapped runs to stop through a file, so they clean up (`stopAll`); a
    part killed before its cleanup is cleaned up by the next run of it (`recover`).
    On Linux and macOS its folder in the temp folder is this user's alone, or it is refused

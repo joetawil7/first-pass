@@ -361,7 +361,8 @@ separate yes to run it; picking a fix is not that yes. For each one chosen:
    always do (the only place in this skill where hooks are on).
 2. CI's own checks for that repo (its `first-pass:project` block or CI config) in a clean
    temp clone holding only the change and the fix, and on the merged result when the base
-   has moved.
+   has moved. With quick mode on (`/first-pass:quick`), the checks the fix can affect run
+   instead, as that skill lists.
 3. A fresh breaker on the fix, started as a new agent: the context that wrote the fix cannot
    review it. If no agent can be started, ask the user to review the fix in a new chat.
 4. Show the diff, the test before and after, the checks' results, and the breaker's result.

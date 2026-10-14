@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.8.3 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.9.0 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -142,7 +142,9 @@ skill has the full procedure.
   is; a later edit with no logic in it needs only what "Scale it to the change" says. Until
   they pass, write "full checks still to run" in the task list, and every report says built,
   not done, and which checks ran on the latest edit. The `review` skill waits for its
-  reviewers, as it says.
+  reviewers, as it says. The `quick` skill, typed by the user, turns on quick mode until they
+  turn it off: the checks the change can affect stand in for CI's full checks, in (3) too, and
+  the report says the rest of the suite did not run here.
 - **UI changes are looked at running.** A change to what a screen shows or how it behaves is
   looked at running before it is called done: the repo's section says how (its UI check: the
   dev server, the spec or the app to open), the machine block says with what (the browsers,

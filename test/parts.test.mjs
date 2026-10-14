@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { PartsError, Runner, alive, checkWrapper, inputsHash, loadRecipe, lock, logsDir, partsRoot, procIsOurs, readEnvFile, readMark, stopTree, unlock } from '../scripts/lib/parts.mjs';
+import { PartsError, Runner, alive, checkTests, checkWrapper, inputsHash, loadRecipe, lock, logsDir, partsRoot, procIsOurs, readEnvFile, readMark, selectParts, stopTree, unlock } from '../scripts/lib/parts.mjs';
 
 const CLI = fileURLToPath(new URL('../scripts/cli.mjs', import.meta.url));
 const NODE = `"${process.execPath}"`;
@@ -24,6 +24,7 @@ const SCRIPTS = {
   'quiet.js': `process.exit(0);`,
   'sleep.js': `const fs = require('fs'); const [ms, out] = process.argv.slice(2); if (out) fs.writeFileSync(out + '.start', String(Date.now())); fs.writeFileSync(out ? out + '.pid' : 'sleep.pid', String(process.pid)); setTimeout(() => { if (out) fs.writeFileSync(out + '.end', String(Date.now())); console.log('Tests: 1 passed'); }, Number(ms));`,
   'touch.js': `require('fs').writeFileSync(process.argv[2], process.argv[3] ?? 'x');`,
+  'args.js': `const [out, ...rest] = process.argv.slice(2); require('fs').writeFileSync(out, JSON.stringify({ args: rest, cwd: process.cwd() })); console.log('Tests: 1 passed');`,
   'envdump.js': `const fs = require('fs'); fs.writeFileSync(process.argv[2], JSON.stringify({ A: process.env.SECRET_A, B: process.env.PLAIN_B, PORT: process.env.MY_PORT })); console.log('Tests: 1 passed');`,
   'readfile.js': `const fs = require('fs'); if (fs.readFileSync(process.argv[2], 'utf8') !== process.argv[3]) process.exit(3); console.log('Tests: 1 passed');`,
   // A server that starts a child of its own, as next dev does, and says ready once it listens.
@@ -719,6 +720,135 @@ test('the CLI checks a recipe, runs it, and exits 2 on a usage or recipe error',
   assert.equal(cli(f.repo, f.co).status, 2);
   assert.equal(cli(f.repo, f.co, f.run, 'zz').status, 2);
   assert.ok(fs.existsSync(partsRoot()));
+  fs.rmSync(logsDir(f.repo, f.run), { recursive: true, force: true });
+  f.cleanup();
+});
+
+const argsOut = (f) => JSON.parse(fs.readFileSync(path.join(f.dir, 'out.json'), 'utf8')).args;
+
+test("chosen tests reach the steps that take them, relative to the step's folder, and a run without them runs whole", async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['e2e']], parts: { e2e: { cwd: 'src', steps: [{ name: 't', run: `${s('args.js', path.join(dir, 'out.json'))} {{tests}}`, ran: 'passed' }] } } }));
+  const recipe = loadRecipe(f.repo);
+  const tests = checkTests(recipe, f.co, ['e2e=src/a.ts,src/b.ts']);
+  const r = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, tests, out: () => {} });
+  assert.equal(await r.runParts(selectParts(recipe, ['e2e'], tests)), true);
+  assert.deepEqual(argsOut(f), ['a.ts', 'b.ts']);
+  assert.deepEqual(readMark(r.markFile('e2e')).tests, ['src/a.ts', 'src/b.ts']);
+  const summary = fs.readFileSync(path.join(r.logs, 'summary.txt'), 'utf8');
+  assert.match(summary, /e2e: only the chosen tests: src\/a\.ts, src\/b\.ts/);
+  assert.match(summary, /=== e2e passed \(chosen tests only\)/);
+  const whole = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, out: () => {} });
+  assert.equal(await whole.runParts(['e2e']), true);
+  assert.deepEqual(argsOut(f), []);
+  assert.equal(readMark(whole.markFile('e2e')).tests, undefined);
+  f.cleanup();
+});
+
+test('a run of chosen tests is never a full pass for a part that needs it', async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['unit'], ['after']], parts: { unit: { steps: [{ name: 't', run: `${s('args.js', path.join(dir, 'out.json'))} {{tests}}`, ran: 'passed' }] }, after: { needs: ['unit'], steps: [{ name: 't', run: s('pass.js'), ran: 'passed' }] } } }));
+  const recipe = loadRecipe(f.repo);
+  const lines = [];
+  const r = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, tests: checkTests(recipe, f.co, ['unit=src/a.ts']), out: (l) => lines.push(l) });
+  assert.equal(await r.runParts(['unit']), true);
+  const next = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, out: (l) => lines.push(l) });
+  assert.equal(await next.runParts(['after']), false);
+  assert.match(lines.join('\n'), /it needs unit, which passed only for chosen tests: run unit whole/);
+  assert.equal(await next.runParts(['unit', 'after']), true);
+  f.cleanup();
+});
+
+test('a sharded part given chosen tests runs once, as shard 1 of 1', async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['flows']], parts: { flows: { shards: 3, steps: [{ name: 't', run: `${s('args.js', path.join(dir, 'out.json'))} {{shard}}/{{shards}} {{tests}}`, ran: 'passed' }] } } }));
+  const recipe = loadRecipe(f.repo);
+  const tests = checkTests(recipe, f.co, ['flows=src/a.ts']);
+  assert.deepEqual(selectParts(recipe, ['flows'], tests), ['flows-1']);
+  assert.deepEqual(selectParts(recipe, ['all'], tests), ['flows-1']);
+  assert.deepEqual(selectParts(recipe, ['flows'], new Map()), ['flows-1', 'flows-2', 'flows-3']);
+  const r = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, tests, out: () => {} });
+  assert.equal(await r.runParts(['flows-1']), true);
+  assert.deepEqual(argsOut(f), ['1/1', 'src/a.ts']);
+  f.cleanup();
+});
+
+test('chosen tests are refused unless each is a safe path in the checkout, for a part that takes them and is run', () => {
+  const f = fixture(({ s }) => ({ firstPassParts: 1, stages: [['prep'], ['e2e', 'flows', 'web']], parts: { prep: { steps: [{ name: 't', run: s('pass.js') }] }, e2e: { steps: [{ name: 't', run: `${s('pass.js')} {{tests}}`, ran: 'passed' }] }, flows: { shards: 2, steps: [{ name: 't', run: `${s('pass.js')} --shard={{shard}}/{{shards}} {{tests}}`, ran: 'passed' }] }, web: { cwd: 'src', steps: [{ name: 't', run: `${s('pass.js')} {{tests}}`, ran: 'passed' }] } } }));
+  const recipe = loadRecipe(f.repo);
+  const refused = [
+    // Test runners read these as patterns, where brackets, "+" and (in some versions) a space stop
+    // the path matching itself; the part then runs whole.
+    ['e2e=src/(auth)/a.ts', /may hold only letters, digits and \. _ @ - \/: run e2e whole for it/],
+    ['e2e=src/[id]/a.ts', /only letters, digits/],
+    ['e2e=src/a+b.ts', /only letters, digits/],
+    ['e2e=src/a b.ts', /only letters, digits/],
+    // A file outside the step's folder reaches the runner as "../..", a pattern that finds nothing.
+    ['web=.gitignore', /\.gitignore is outside the folder web's tests run in \(src\): give it to the part that runs it, or run web whole/],
+    ['e2e=src/-u', /starts with "-"/],
+    ['e2e=src/a.ts;calc', /only letters, digits/],
+    ['e2e=src/a.ts&calc', /only letters, digits/],
+    ['e2e="src/a.ts"', /only letters, digits/],
+    ['e2e=src/%PATH%', /only letters, digits/],
+    ['e2e=src/$(id)', /only letters, digits/],
+    ['e2e=../outside.ts', /inside the checkout/],
+    ['e2e=src/../../outside.ts', /inside the checkout/],
+    [`e2e=${f.co.replace(/\\/g, '/')}/src/a.ts`, /relative to the checkout/],
+    ['e2e=--config=evil.js', /starts with "-"/],
+    ['e2e=src/nope.ts', /not in the checkout/],
+    ['e2e=', /no test files/],
+    ['e2e', /<part>=<file>/],
+    ['prep=src/a.ts', /prep's steps take no test list/],
+    ['flows-2=src/a.ts', /give the tests to flows/],
+    ['zz=src/a.ts', /not a part/],
+  ];
+  for (const [spec, error] of refused) assert.throws(() => checkTests(recipe, f.co, [spec]), error, spec);
+  assert.throws(() => checkTests(recipe, f.co, ['e2e=src/a.ts', 'e2e=src/b.ts']), /twice/);
+  const tests = checkTests(recipe, f.co, ['e2e=src\\a.ts, src/b.ts ']);
+  assert.deepEqual(tests.get('e2e'), ['src/a.ts', 'src/b.ts']);
+  assert.deepEqual(checkTests(recipe, f.co, ['web=src/a.ts']).get('web'), ['src/a.ts']);
+  assert.throws(() => selectParts(recipe, ['prep'], tests), /this run does not run e2e/);
+  f.cleanup();
+});
+
+test("the recipe allows {{tests}} only in a step's run", () => {
+  const cases = [
+    one([{ name: 'a', run: 'x' }], { env: { T: '{{tests}}' } }),
+    one([{ name: 'a', run: 'x' }], { cleanup: [{ name: 'c', run: 'y {{tests}}' }] }),
+    one([{ name: 'a', run: 'x' }], { server: { run: 's {{tests}}', ready: 'r', url: 'http://127.0.0.1:{{port}}/', ports: [5000, 5001] } }),
+    one([{ name: 'a', run: 'x', env: { T: '{{tests}}' } }]),
+    one([{ name: 'a', run: 'x' }], { files: { 'f.txt': '{{tests}}' } }),
+  ];
+  for (const recipe of cases) {
+    const f = fixture(recipe);
+    assert.throws(() => loadRecipe(f.repo), /\{\{tests\}\} goes only in a step's "run"/);
+    f.cleanup();
+  }
+  for (const step of [{ name: 'a', run: 'x {{tests}}' }, { name: 'a', run: 'x {{tests}}', ran: '' }]) {
+    const f = fixture(one([step]));
+    assert.throws(() => loadRecipe(f.repo), /step a takes \{\{tests\}\}, so it needs "ran"/);
+    f.cleanup();
+  }
+});
+
+test("through a wrapper, chosen tests reach the part's own run of the CLI, and its mark says so", async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['e2e']], parts: { e2e: { steps: [{ name: 't', run: `${s('args.js', path.join(dir, 'out.json'))} {{tests}}`, ran: 'passed' }] } } }));
+  const recipe = loadRecipe(f.repo);
+  const wrapper = checkWrapper([process.execPath, path.join(f.bin, 'wrapper.js'), path.join(f.dir, 'w.jsonl'), '{{name}}', '{{memoryGB}}', '{{timeoutMin}}', '{{commandFile}}']);
+  const r = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, tests: checkTests(recipe, f.co, ['e2e=src/a.ts']), wrapper, cli: CLI, out: () => {} });
+  assert.equal(await r.runParts(['e2e']), true);
+  assert.deepEqual(argsOut(f), ['src/a.ts']);
+  assert.deepEqual(readMark(r.markFile('e2e')).tests, ['src/a.ts']);
+  assert.match(fs.readFileSync(path.join(r.logs, 'e2e.command'), 'utf8'), /"--tests" "e2e=src\/a\.ts"/);
+  f.cleanup();
+});
+
+test('the CLI passes --tests to the part, says which parts take them, and exits 2 on a bad one', () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['e2e']], parts: { e2e: { steps: [{ name: 't', run: `${s('args.js', path.join(dir, 'out.json'))} {{tests}}`, ran: 'passed' }] } } }));
+  const cli = (...args) => spawnSync(process.execPath, [CLI, 'parts', ...args], { encoding: 'utf8', timeout: 60000 });
+  assert.match(cli(f.repo, 'check').stdout, /e2e \(.*takes --tests/);
+  const ran = cli(f.repo, f.co, f.run, 'e2e', '--tests', 'e2e=src/a.ts');
+  assert.equal(ran.status, 0, ran.stdout + ran.stderr);
+  assert.match(ran.stdout, /=== e2e passed \(chosen tests only\)/);
+  assert.deepEqual(argsOut(f), ['src/a.ts']);
+  assert.equal(cli(f.repo, f.co, f.run, 'e2e', '--tests', 'e2e=src/nope.ts').status, 2);
   fs.rmSync(logsDir(f.repo, f.run), { recursive: true, force: true });
   f.cleanup();
 });

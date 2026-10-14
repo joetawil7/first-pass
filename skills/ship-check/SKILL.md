@@ -231,7 +231,10 @@ runs the recipe's stages in order and each stage's parts side by side, each with
 its own run-named databases and its own logs, and through the main folder's `partWrapper` when
 it has one (the machine's memory cap, which setup copies from the machine block: with a
 `partWrapper`, start the runner itself directly, never inside that cap; without one, see below).
-A later edit reruns only the parts it can affect, named instead of `all`; a part refuses to run
+A later edit reruns only the parts it can affect, named instead of `all`. `--tests
+<part>=<file>[,<file>...]` gives a part whose steps take `{{tests}}` only those files (a sharded
+part then runs once), and that run never counts as the part's full pass for a part that needs
+it. A part refuses to run
 while a part it needs has not passed on that worktree with the same inputs. `parts <repo> check`
 lists the parts. It prints its logs folder at the start and the end: read `summary.txt` there, and
 the log of each step that failed. A stopped run cleans up after itself; one killed outright is
@@ -251,11 +254,25 @@ check` says "no partWrapper" (one repo with no main folder, or a main folder set
 wrapper), run each part by name, one at a time, inside that wrapper, as every heavy run goes;
 never `all` uncapped.
 
+**Quick mode.** When the user turned it on with `/first-pass:quick` (the task list says
+"Checks: quick"), the checks the change can affect run here instead of the full checks, and
+once more on the final change instead of them, as that skill lists: the format, lint, type and build checks of
+the packages it touches; its own tests and the tests of the files it changes; and every unit,
+integration, flow and browser test that reaches the changed code, directly or through its
+callers, or that reads or writes the same data; when the change touches jobs, payments,
+publishing, deletion or auth, the whole integration suite; and a part whole when the change
+alters what shared code sees. Find them by following the callers out to the routes, jobs,
+events, commands and screens tests drive, then the tests that reach any of them, plus the test
+runner's list of related tests where it has one; a run that selects no tests is not a pass, and
+when unsure whether a test reaches the change, it runs. In a repo with a parts recipe, they run
+through the runner with `--tests`, as above. The rest of the suite does not run here, and the
+report says so. Every other step runs as written.
+
 A failure that also happens on the base without the change is pre-existing: name the test
 and move on. A failure the change caused gets a fix; a fix that is more than small goes
 back to step 3, reviewed like a fix for real harm. The fix reruns the part that failed and
 the checks it can affect, and the full checks run once more on the final change, as step 3
-says. Keep the worktree until those final full checks pass; then remove it
+says. Keep the worktree until those final checks pass (in quick mode, the chosen ones); then remove it
 (`git -C <repo> worktree remove --force <path>`) and any leftovers, including env files copied
 in for runs that send nothing.
 
@@ -287,7 +304,7 @@ review.
 ```
 <What changed, one plain line: what the user can now do or will notice>
 Verified: <what was run and how much of it, said plainly> → <result>, one line each (the test that failed before and passes now, with pass and fail counts; CI's checks)
-Full checks on the final change: <passed, with counts (failures the base has too named) | still to run: which checks ran on the latest edit, and how long the full checks take>
+Full checks on the final change: <passed, with counts (failures the base has too named) | still to run: which checks ran on the latest edit, and how long the full checks take | not run (quick mode): the checks that ran instead, with counts>
 UI looked at running: <the screens, widths or devices, and the screenshot paths | Not checked: why>
 Fresh review: <what the second reviewer found: n fixed, n disputed, n on the list>
 To pick: <real harm left for the user's answer first, then the smaller and older findings, numbered, each with its worst case, who meets it and what fixing it would change>

@@ -23,14 +23,17 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   review findings, and code, not the model, holds the policy (it can add harm, never clear
   it; a failed or unsure answer leaves the call to the rules). The `hulk` skill, typed by
   hand, lifts the rules' "Stay in the task's scope" for one task, so reviews and
-  `fix-the-class` look across the whole codebase again. `cli.mjs parts` (`scripts/lib/parts.mjs`)
+  `fix-the-class` look across the whole codebase again. The `quick` skill, typed by hand, turns on
+  quick mode until `/first-pass:quick off`: the checks a change can affect stand in for CI's full
+  checks, and the rest of the suite is left for a full run. `cli.mjs parts` (`scripts/lib/parts.mjs`)
   runs a repo's CI checks on this machine from the recipe in its `.first-pass/parts.json`: stages
   in order, a stage's parts side by side, each through the main folder's `partWrapper` when it
-  has one; `ship-check` step 4 runs it and setup step 5 drafts the recipe.
+  has one; `--tests` gives a part whose steps take `{{tests}}` only chosen test files, and that
+  run never counts as its full pass; `ship-check` step 4 runs it and setup step 5 drafts the recipe.
 - **CI's checks** (`.github/workflows/validate.yml`, job `validate`): `claude plugin validate
   --strict .` and on `.claude-plugin/plugin.json` (Claude Code pinned to 2.1.280), skill names
   match folders, the skills the rules name (`premortem`, `ship-check`, `fix-the-class`,
-  `setup-first-pass`, `habit-words`, `sharpen`, `review`, `jev`, `hulk`) and the breaker asset exist, every
+  `setup-first-pass`, `habit-words`, `sharpen`, `review`, `jev`, `hulk`, `quick`) and the breaker asset exist, every
   block has one start and one end marker, the rules, profile, words and machine block versions equal
   `plugin.json`'s, the hooks point at scripts that exist, `node --test test/*.test.mjs`, and
   the private-name check.
@@ -74,7 +77,8 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   **Sharpened** in `skills/sharpen/SKILL.md` step 5 and `SHOWN` in the gate; the transcript row shapes `typedText` in
   `scripts/lib/words.mjs` knows and what Claude Code writes (a new row kind is silently left
   out or wrongly kept); the recipe fields `loadRecipe` in `scripts/lib/parts.mjs` accepts and
-  the list in setup step 5, and `WRAPPER_VARS` and setup step 4's `partWrapper` placeholders.
+  the list in setup step 5, `VARS` there and the placeholders setup step 5 names, and
+  `WRAPPER_VARS` and setup step 4's `partWrapper` placeholders.
 - **Extra pre-mortem cases** (this repo's own ways to run twice, end, or scale): a plugin
   update with an unchanged version is not picked up by `claude plugin update`, so every
   release bumps `plugin.json`; a change to a managed block reaches a user only when they
