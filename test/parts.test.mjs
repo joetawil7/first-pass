@@ -856,3 +856,96 @@ test('the CLI passes --tests to the part, says which parts take them, and exits 
   fs.rmSync(logsDir(f.repo, f.run), { recursive: true, force: true });
   f.cleanup();
 });
+
+// A part that holds the checks quick mode always runs (format, build) and a test step whose tests
+// the change may not reach at all.
+const verifyPart = (s, dir) => ({ steps: [
+  { name: 'format', run: s('pass.js', path.join(dir, 'format.done')) },
+  { name: 'units', run: `${s('args.js', path.join(dir, 'out.json'))} {{tests}}`, ran: 'passed' },
+  { name: 'rules', run: s('pass.js', path.join(dir, 'rules.done')) },
+] });
+
+test('a part run without its tests runs its other steps, never the ones that take a test list, and says so', async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['verify']], parts: { verify: verifyPart(s, dir) } }));
+  const recipe = loadRecipe(f.repo);
+  const lines = [];
+  const r = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, noTests: new Set(['verify']), out: (l) => lines.push(l) });
+  assert.equal(await r.runParts(['verify']), true);
+  assert.ok(fs.existsSync(path.join(f.dir, 'format.done')) && fs.existsSync(path.join(f.dir, 'rules.done')), 'the other steps ran');
+  assert.ok(!fs.existsSync(path.join(f.dir, 'out.json')), 'the test step did not run, not even as the whole suite');
+  assert.equal(readMark(r.markFile('verify')).withoutTests, true);
+  const text = lines.join('\n');
+  assert.match(text, /verify: without its tests: units does not run/);
+  assert.match(text, /verify units: not run \(--no-tests\)/);
+  assert.match(text, /=== verify passed \(without its tests\)/);
+  assert.match(text, /=== every part passed \(without its tests for verify\)/);
+  f.cleanup();
+});
+
+test('a run without its tests is never a full pass for a part that needs it', async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['verify'], ['after']], parts: { verify: verifyPart(s, dir), after: { needs: ['verify'], steps: [{ name: 't', run: s('pass.js'), ran: 'passed' }] } } }));
+  const recipe = loadRecipe(f.repo);
+  const lines = [];
+  const r = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, noTests: new Set(['verify']), out: (l) => lines.push(l) });
+  assert.equal(await r.runParts(['verify']), true);
+  const next = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, out: (l) => lines.push(l) });
+  assert.equal(await next.runParts(['after']), false);
+  assert.match(lines.join('\n'), /it needs verify, which passed without its tests: run verify whole/);
+  assert.equal(await next.runParts(['verify', 'after']), true);
+  f.cleanup();
+});
+
+test("through a wrapper, a part without its tests gets that in its own run of the CLI, and its mark says so", async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['verify']], parts: { verify: verifyPart(s, dir) } }));
+  const recipe = loadRecipe(f.repo);
+  const wrapper = checkWrapper([process.execPath, path.join(f.bin, 'wrapper.js'), path.join(f.dir, 'w.jsonl'), '{{name}}', '{{memoryGB}}', '{{timeoutMin}}', '{{commandFile}}']);
+  const r = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, noTests: new Set(['verify']), wrapper, cli: CLI, out: () => {} });
+  assert.equal(await r.runParts(['verify']), true);
+  assert.ok(fs.existsSync(path.join(f.dir, 'format.done')));
+  assert.ok(!fs.existsSync(path.join(f.dir, 'out.json')), 'the wrapped run skipped the test step too');
+  assert.equal(readMark(r.markFile('verify')).withoutTests, true);
+  assert.match(fs.readFileSync(path.join(r.logs, 'verify.command'), 'utf8'), /"--no-tests" "verify"/);
+  f.cleanup();
+});
+
+test('the CLI runs a part without its tests, a sharded one once, and refuses a part it cannot run that way', () => {
+  const f = fixture(({ s, dir }) => ({
+    firstPassParts: 1,
+    stages: [['prep'], ['verify', 'e2e', 'flows']],
+    parts: {
+      prep: { steps: [{ name: 't', run: s('pass.js') }] },
+      verify: verifyPart(s, dir),
+      e2e: { steps: [{ name: 't', run: `${s('pass.js')} {{tests}}`, ran: 'passed' }] },
+      flows: { shards: 3, steps: [{ name: 'setup', run: `${s('args.js', path.join(dir, 'shard.json'))} {{shard}}/{{shards}}` }, { name: 't', run: `${s('pass.js')} {{tests}}`, ran: 'passed' }] },
+    },
+  }));
+  const cli = (...args) => spawnSync(process.execPath, [CLI, 'parts', ...args], { encoding: 'utf8', timeout: 60000 });
+  const ran = cli(f.repo, f.co, f.run, 'verify', '--no-tests', 'verify');
+  assert.equal(ran.status, 0, ran.stdout + ran.stderr);
+  assert.match(ran.stdout, /=== verify passed \(without its tests\)/);
+  assert.ok(!fs.existsSync(path.join(f.dir, 'out.json')), 'the test step did not run');
+  const eq = cli(f.repo, f.co, f.run, 'verify', '--no-tests=verify');
+  assert.equal(eq.status, 0, eq.stdout + eq.stderr);
+  assert.match(eq.stdout, /=== verify passed \(without its tests\)/, 'the --no-tests=<part> form works too');
+  const sharded = cli(f.repo, f.co, f.run, 'flows', '--no-tests', 'flows');
+  assert.equal(sharded.status, 0, sharded.stdout + sharded.stderr);
+  assert.match(sharded.stdout, /=== flows-1 passed \(without its tests\)/);
+  assert.doesNotMatch(sharded.stdout, /flows-2/, 'a sharded part runs once');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(f.dir, 'shard.json'), 'utf8')).args, ['1/1']);
+  const refused = [
+    [['prep', '--no-tests', 'prep'], /--no-tests: prep's steps take no test list, so it runs whole anyway: leave --no-tests out/],
+    [['flows', '--no-tests', 'flows-2'], /--no-tests: name flows, not one of its shards/],
+    [['e2e', '--no-tests', 'e2e'], /--no-tests: every step of e2e takes the test list, so it would run nothing: leave e2e out of the run/],
+    [['verify', '--no-tests', 'verify', '--tests', 'verify=src/a.ts'], /--no-tests names verify, which --tests gives files: give it one or the other/],
+    [['verify', '--no-tests', 'verify', '--no-tests', 'verify'], /--no-tests names verify twice/],
+    [['verify', '--no-tests', 'zz'], /--no-tests names "zz", which is not a part/],
+    [['prep', '--no-tests', 'verify'], /--no-tests names verify, but this run does not run verify/],
+  ];
+  for (const [args, error] of refused) {
+    const out = cli(f.repo, f.co, f.run, ...args);
+    assert.equal(out.status, 2, `${args.join(' ')}: ${out.stdout}${out.stderr}`);
+    assert.match(out.stderr, error, args.join(' '));
+  }
+  fs.rmSync(logsDir(f.repo, f.run), { recursive: true, force: true });
+  f.cleanup();
+});

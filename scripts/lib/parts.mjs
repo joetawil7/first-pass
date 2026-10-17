@@ -210,14 +210,37 @@ export function checkTests(recipe, checkout, specs = []) {
   return tests;
 }
 
-// The parts a run runs. A sharded part given chosen tests runs once, as its first shard (shard 1
-// of 1): a few files need no splitting, and a shard left with none would run no tests.
-export function selectParts(recipe, names, tests = new Map()) {
+// The parts a run gives no tests at all (`--no-tests <part>`): their steps that take {{tests}} do
+// not run, and their other steps do (quick mode's format, lint and build checks, when no test of
+// the part reaches the change). A part with no other step would run nothing, so it is refused.
+export function checkNoTests(recipe, names = [], tests = new Map()) {
+  const without = new Set();
+  for (const name of names) {
+    const group = recipe.groups.get(name);
+    if (!group) {
+      const shard = recipe.parts.get(name);
+      throw new PartsError(shard ? `--no-tests: name ${shard.group}, not one of its shards` : `--no-tests names "${name}", which is not a part`);
+    }
+    const first = recipe.parts.get(group[0]);
+    if (!first.takesTests) throw new PartsError(`--no-tests: ${name}'s steps take no test list, so it runs whole anyway: leave --no-tests out`);
+    if (tests.has(name)) throw new PartsError(`--no-tests names ${name}, which --tests gives files: give it one or the other`);
+    if (without.has(name)) throw new PartsError(`--no-tests names ${name} twice`);
+    if (first.steps.every((step) => placeholders(step.run).includes('tests'))) throw new PartsError(`--no-tests: every step of ${name} takes the test list, so it would run nothing: leave ${name} out of the run`);
+    without.add(name);
+  }
+  return without;
+}
+
+// The parts a run runs. A sharded part given chosen tests, or none, runs once, as its first shard
+// (shard 1 of 1): a few files need no splitting, and a shard left with none would run no tests.
+export function selectParts(recipe, names, tests = new Map(), noTests = new Set()) {
   let chosen = names.includes('all') ? [...recipe.parts.keys()] : [...new Set(names.flatMap((n) => recipe.expand(n, 'the command')))];
-  for (const group of tests.keys()) {
-    const members = recipe.groups.get(group);
-    if (!members.some((n) => chosen.includes(n))) throw new PartsError(`--tests names ${group}, but this run does not run ${group}`);
-    if (members.length > 1) chosen = [...new Set([...chosen.filter((n) => !members.includes(n)), members[0]])];
+  for (const [option, groups] of [['--tests', [...tests.keys()]], ['--no-tests', [...noTests]]]) {
+    for (const group of groups) {
+      const members = recipe.groups.get(group);
+      if (!members.some((n) => chosen.includes(n))) throw new PartsError(`${option} names ${group}, but this run does not run ${group}`);
+      if (members.length > 1) chosen = [...new Set([...chosen.filter((n) => !members.includes(n)), members[0]])];
+    }
   }
   return chosen;
 }
@@ -503,11 +526,11 @@ async function released(port) {
 }
 
 export class Runner {
-  constructor({ repo, checkout, run, recipe, tests = new Map(), wrapper = null, cli = null, out = (line) => console.log(line) }) {
+  constructor({ repo, checkout, run, recipe, tests = new Map(), noTests = new Set(), wrapper = null, cli = null, out = (line) => console.log(line) }) {
     if (!RUN_NAME.test(run)) throw new PartsError('the run name is lowercase letters and digits (it goes into database names)');
     if (!fs.existsSync(checkout)) throw new PartsError(`${checkout} does not exist`);
     if (canonical(checkout) === canonical(repo)) throw new PartsError(`run it on a clean checkout, not the tree you work in (${repo})`);
-    Object.assign(this, { repo: path.resolve(repo), checkout: path.resolve(checkout), run, recipe, tests, wrapper, cli, out });
+    Object.assign(this, { repo: path.resolve(repo), checkout: path.resolve(checkout), run, recipe, tests, noTests, wrapper, cli, out });
     this.logs = logsDir(repo, run);
     claimRun(this.logs, checkout);
     this.active = new Set();
@@ -538,6 +561,7 @@ export class Runner {
       const mark = marks[dep];
       if (!mark) return { why: `it needs ${dep}, which has not passed on this checkout: run ${dep} first`, seen };
       if (mark.tests) return { why: `it needs ${dep}, which passed only for chosen tests: run ${dep} whole`, seen };
+      if (mark.withoutTests) return { why: `it needs ${dep}, which passed without its tests: run ${dep} whole`, seen };
       if (mark.hash !== inputsHash(this.checkout, this.recipe.parts.get(dep).inputs)) return { why: `${dep}'s inputs changed since it passed: run ${dep} again`, seen };
       // A part rerun after this one passed (a new install) makes this one's result stale too.
       for (const [up, at] of Object.entries(mark.deps ?? {})) {
@@ -550,11 +574,12 @@ export class Runner {
   }
 
   // Written after the part passed, whole or not at all; the hash and deps are as they were when
-  // it started. A run of chosen tests says so, so it never counts as the part's full pass.
+  // it started. A run of chosen tests, or of none, says so, so it never counts as the part's full pass.
   writeMark(part, hash, deps) {
     const file = this.markFile(part.name);
     const tests = this.tests.get(part.group);
-    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ hash, at: new Date().toISOString(), deps, ...(tests ? { tests } : {}) }));
+    const without = this.noTests.has(part.group);
+    fs.writeFileSync(`${file}.tmp`, JSON.stringify({ hash, at: new Date().toISOString(), deps, ...(tests ? { tests } : {}), ...(without ? { withoutTests: true } : {}) }));
     fs.renameSync(`${file}.tmp`, file);
   }
 
@@ -563,7 +588,7 @@ export class Runner {
   }
 
   baseVars(part) {
-    const once = part.shards && this.tests.has(part.group);
+    const once = part.shards && (this.tests.has(part.group) || this.noTests.has(part.group));
     return { run: this.run, checkout: this.checkout, repo: this.repo, logs: this.logs, shard: once ? 1 : part.shard, shards: once ? 1 : part.shards, port: null };
   }
 
@@ -683,6 +708,12 @@ export class Runner {
     this.note(`=== ${part.name} start (checkout ${this.checkout}, run ${this.run})`);
     const chosenTests = this.tests.get(part.group);
     if (chosenTests) this.note(`${part.name}: only the chosen tests: ${chosenTests.join(', ')}`);
+    const takesTests = (step) => placeholders(step.run).includes('tests');
+    const without = this.noTests.has(part.group);
+    if (without) {
+      const skipped = part.steps.filter(takesTests).map((step) => step.name);
+      this.note(`${part.name}: without its tests: ${skipped.join(', ')} ${skipped.length === 1 ? 'does' : 'do'} not run`);
+    }
     fs.mkdirSync(path.join(this.logs, 'marks'), { recursive: true });
     const partLock = path.join(this.logs, `${part.name}.lock`);
     if (!lock(partLock)) {
@@ -730,6 +761,10 @@ export class Runner {
       }
       for (const step of part.steps) {
         if (this.stopping) throw new PartsError('stopped');
+        if (without && takesTests(step)) {
+          this.note(`${part.name} ${step.name}: not run (--no-tests)`);
+          continue;
+        }
         const result = await this.exec(part, step, vars, env, deadline, '');
         if (!result.ok) ok = false;
         if (result.timedOut) throw new PartsError(`it ran past its ${part.timeoutMin ?? 30} minutes`);
@@ -765,7 +800,7 @@ export class Runner {
         ok = false;
       } else this.writeMark(part, hash, deps);
     }
-    this.note(`=== ${part.name} ${ok && !this.stopping ? (chosenTests ? 'passed (chosen tests only)' : 'passed') : 'FAILED'}`);
+    this.note(`=== ${part.name} ${ok && !this.stopping ? (chosenTests ? 'passed (chosen tests only)' : without ? 'passed (without its tests)' : 'passed') : 'FAILED'}`);
     return ok;
   }
 
@@ -776,7 +811,7 @@ export class Runner {
     fs.mkdirSync(path.join(this.logs, 'marks'), { recursive: true });
     fs.rmSync(this.markFile(part.name), { force: true });
     const tests = this.tests.get(part.group);
-    const command = [process.execPath, this.cli, 'parts', this.repo, this.checkout, this.run, part.name, '--inner', ...(tests ? ['--tests', `${part.group}=${tests.join(',')}`] : [])].map((a) => `"${a.replace(/\\/g, '/')}"`).join(' ');
+    const command = [process.execPath, this.cli, 'parts', this.repo, this.checkout, this.run, part.name, '--inner', ...(tests ? ['--tests', `${part.group}=${tests.join(',')}`] : []), ...(this.noTests.has(part.group) ? ['--no-tests', part.group] : [])].map((a) => `"${a.replace(/\\/g, '/')}"`).join(' ');
     const commandFile = path.join(this.logs, `${part.name}.command`);
     fs.writeFileSync(commandFile, command + '\n');
     const vars = { name: part.name, memoryGB: part.memoryGB ?? 4, timeoutMin: (part.timeoutMin ?? 30) + 5, logs: this.logs, repo: this.repo, checkout: this.checkout, command, commandFile };
@@ -821,8 +856,9 @@ export class Runner {
     } finally {
       if (poll) clearInterval(poll);
     }
-    const partly = this.tests.size ? ` (chosen tests only for ${[...this.tests.keys()].join(', ')})` : '';
-    if (!inner) this.note(`=== ${ok && !this.stopping ? `every part passed${partly}` : 'FAILED'}; summary.txt and each step's log are in ${this.logs}`);
+    const partly = [this.tests.size && `chosen tests only for ${[...this.tests.keys()].join(', ')}`, this.noTests.size && `without its tests for ${[...this.noTests].join(', ')}`].filter(Boolean);
+    const partlyText = partly.length ? ` (${partly.join('; ')})` : '';
+    if (!inner) this.note(`=== ${ok && !this.stopping ? `every part passed${partlyText}` : 'FAILED'}; summary.txt and each step's log are in ${this.logs}`);
     return ok && !this.stopping;
   }
 

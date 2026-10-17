@@ -28,8 +28,8 @@ Claude Code does not load this file on its own here: a CLAUDE.md at a plugin roo
   checks, and the rest of the suite is left for a full run. `cli.mjs parts` (`scripts/lib/parts.mjs`)
   runs a repo's CI checks on this machine from the recipe in its `.first-pass/parts.json`: stages
   in order, a stage's parts side by side, each through the main folder's `partWrapper` when it
-  has one; `--tests` gives a part whose steps take `{{tests}}` only chosen test files, and that
-  run never counts as its full pass; `ship-check` step 4 runs it and setup step 5 drafts the recipe.
+  has one; `--tests` gives a part whose steps take `{{tests}}` only chosen test files, `--no-tests`
+  runs its other steps without them, and neither run counts as its full pass; `ship-check` step 4 runs it and setup step 5 drafts the recipe.
 - **CI's checks** (`.github/workflows/validate.yml`, job `validate`): `claude plugin validate
   --strict .` and on `.claude-plugin/plugin.json` (Claude Code pinned to 2.1.280), skill names
   match folders, the skills the rules name (`premortem`, `ship-check`, `fix-the-class`,

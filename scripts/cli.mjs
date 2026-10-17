@@ -20,10 +20,11 @@
 //   node cli.mjs jev ask harm|priority|proof <findings.json> <repo>
 //                                               Jev's verdict on each finding, as JSON ("rule" = decide by the rules)
 //   node cli.mjs parts <repo> check             the repo's CI parts (<repo>/.first-pass/parts.json), stage by stage
-//   node cli.mjs parts <repo> <checkout> <run-name> all|<part>... [--tests <part>=<file>[,<file>...]]...
+//   node cli.mjs parts <repo> <checkout> <run-name> all|<part>... [--tests <part>=<file>[,<file>...]]... [--no-tests <part>]...
 //                                               runs them on a clean checkout, a stage's parts side by side,
 //                                               each through the main folder's "partWrapper" when it has one;
-//                                               --tests gives a part whose steps take {{tests}} only those files
+//                                               --tests gives a part whose steps take {{tests}} only those files,
+//                                               --no-tests runs a part's other steps without those
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -35,7 +36,7 @@ import { drift } from './lib/drift.mjs';
 import { approval } from './lib/fingerprint.mjs';
 import { JEV_URL, configPath, judge, judgeFor, readFindings } from './lib/jev.mjs';
 import { repoHooksHash } from './lib/instructions.mjs';
-import { PartsError, Runner, checkTests, checkWrapper, describe, loadRecipe, selectParts } from './lib/parts.mjs';
+import { PartsError, Runner, checkNoTests, checkTests, checkWrapper, describe, loadRecipe, selectParts } from './lib/parts.mjs';
 import { surveyWorkspace } from './lib/survey.mjs';
 import { countMatching, deleteWordsFile, projectsDir, readRecent, removeStaleWordsFiles, summary, writeWordsFile } from './lib/words.mjs';
 import { CONFIG_PATH, findWorkspace, loadWorkspace } from './lib/workspace.mjs';
@@ -152,9 +153,9 @@ async function jev([sub, ...rest]) {
   throw new Error('usage: node cli.mjs jev status [repo] | test <repo> | ask harm|priority|proof <findings.json> <repo>');
 }
 
-const PARTS_USAGE = 'usage: node cli.mjs parts <repo> check | parts <repo> <checkout> <run-name> all|<part>... [--tests <part>=<file>[,<file>...]]...';
+const PARTS_USAGE = 'usage: node cli.mjs parts <repo> check | parts <repo> <checkout> <run-name> all|<part>... [--tests <part>=<file>[,<file>...]]... [--no-tests <part>]...';
 
-async function parts([repoArg, checkout, run, ...names], inner, testSpecs = []) {
+async function parts([repoArg, checkout, run, ...names], inner, testSpecs = [], noTestNames = []) {
   if (!repoArg || !checkout) throw new PartsError(PARTS_USAGE);
   const repo = path.resolve(repoArg);
   const recipe = loadRecipe(repo);
@@ -166,8 +167,9 @@ async function parts([repoArg, checkout, run, ...names], inner, testSpecs = []) 
   }
   if (!run || !names.length) throw new PartsError(PARTS_USAGE);
   const tests = checkTests(recipe, path.resolve(checkout), testSpecs);
-  const chosen = selectParts(recipe, names, tests);
-  const runner = new Runner({ repo, checkout: path.resolve(checkout), run, recipe, tests, wrapper: inner ? null : wrapper, cli: fileURLToPath(import.meta.url) });
+  const noTests = checkNoTests(recipe, noTestNames, tests);
+  const chosen = selectParts(recipe, names, tests, noTests);
+  const runner = new Runner({ repo, checkout: path.resolve(checkout), run, recipe, tests, noTests, wrapper: inner ? null : wrapper, cli: fileURLToPath(import.meta.url) });
   const interrupted = () => {
     runner.note('stopping: interrupted');
     runner.stopAll();
@@ -187,7 +189,7 @@ const command = args[0];
 const flags = [];
 const ciNames = [];
 const positional = [];
-const options = { '--sessions': [], '--count': [], '--delete': [], '--tests': [] };
+const options = { '--sessions': [], '--count': [], '--delete': [], '--tests': [], '--no-tests': [] };
 for (let i = 1; i < args.length; i++) {
   if (args[i] === '--ci') ciNames.push(args[++i] ?? 'all');
   else if (args[i].startsWith('--') && args[i].includes('=') && Object.hasOwn(options, args[i].slice(0, args[i].indexOf('=')))) {
@@ -229,7 +231,7 @@ if (command === 'survey') {
   }
 } else if (command === 'parts') {
   try {
-    process.exitCode = await parts(positional, flags.includes('--inner'), options['--tests']);
+    process.exitCode = await parts(positional, flags.includes('--inner'), options['--tests'], options['--no-tests']);
   } catch (error) {
     if (!(error instanceof PartsError)) throw error;
     console.error(error.message);

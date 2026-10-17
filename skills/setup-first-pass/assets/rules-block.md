@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.9.1 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.9.2 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -131,8 +131,9 @@ skill has the full procedure.
   it, and the format, lint, type and build checks of the packages it touched. A part it
   reaches through shared code runs whole only when the edit changes what that other code
   sees (a shared package's exports, a migration, a config value, a route's or event's shape).
-  A run that selects no tests is not a pass: fix the selection, or run that part whole. The
-  words, monitoring and invariants checks run for what it changed. CI's full checks run once
+  A test run that selects no tests (the test-list steps a quick-mode `--no-tests` run skips do
+  not count as one) is not a pass: fix the selection, or run that part whole. The words, monitoring and
+  invariants checks run for what it changed. CI's full checks run once
   more, in the clean checkout holding the final change, unless every part of them has already
   run whole, from start to end, after the final change was copied in, once no review or fix is pending and nothing is left for the user to pick or
   answer, the user picks nothing more from a list, or the user asks to call it done, commit,

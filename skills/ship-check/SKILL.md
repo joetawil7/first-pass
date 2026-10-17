@@ -109,8 +109,9 @@ the files it changed, the unit, integration and end-to-end (browser) test files 
 them (directly or through their callers), the part that failed when a check led to it, and the format, lint,
 type and build checks of the packages it touched. A part it reaches through shared code runs
 whole only when the edit changes what that other code sees (a shared package's exports, a
-migration, a config value, a route's or event's shape). A run that selects no tests is not a
-pass: fix the selection, or run that part whole. The words, monitoring and invariants checks
+migration, a config value, a route's or event's shape). A test run that selects no tests
+(the test-list steps a quick-mode `--no-tests` run skips do not count as one) is not a pass: fix
+the selection, or run that part whole. The words, monitoring and invariants checks
 run for what it changed. CI's full checks (step 4) run once more, in the clean checkout
 holding the final change, unless every part of them has already run whole, from start to
 end, after the final change was copied in, once no review or fix is pending and nothing is left for the user to pick or answer, the user picks nothing
@@ -234,7 +235,9 @@ it has one (the machine's memory cap, which setup copies from the machine block:
 A later edit reruns only the parts it can affect, named instead of `all`. `--tests
 <part>=<file>[,<file>...]` gives a part whose steps take `{{tests}}` only those files (a sharded
 part then runs once), and that run never counts as the part's full pass for a part that needs
-it. A part refuses to run
+it. `--no-tests <part>` runs a part's other steps without the ones that take `{{tests}}` (a
+sharded part then runs once), for quick mode when none of the tests those steps would run reach
+the change, and that run never counts as the part's full pass either. A part refuses to run
 while a part it needs has not passed on that worktree with the same inputs. `parts <repo> check`
 lists the parts. It prints its logs folder at the start and the end: read `summary.txt` there, and
 the log of each step that failed. A stopped run cleans up after itself; one killed outright is
@@ -263,9 +266,13 @@ callers, or that reads or writes the same data; when the change touches jobs, pa
 publishing, deletion or auth, the whole integration suite; and a part whole when the change
 alters what shared code sees. Find them by following the callers out to the routes, jobs,
 events, commands and screens tests drive, then the tests that reach any of them, plus the test
-runner's list of related tests where it has one; a run that selects no tests is not a pass, and
-when unsure whether a test reaches the change, it runs. In a repo with a parts recipe, they run
-through the runner with `--tests`, as above. The rest of the suite does not run here, and the
+runner's list of related tests where it has one; a test run that selects no tests (the
+test-list steps a `--no-tests` run skips do not count as one) is not a pass, and when unsure
+whether a test reaches the change, it runs. In a repo with a parts recipe, they run through the runner: the
+chosen files a part's test-list steps (those with `{{tests}}`) run go to it with `--tests`, and a
+part that holds chosen checks when none of the tests those steps would run reach the change runs
+with `--no-tests` (unless the list above runs it whole, for a change to what shared code sees or
+for jobs, payments, publishing, deletion or auth), as above. The rest of the suite does not run here, and the
 report says so. Every other step runs as written.
 
 A failure that also happens on the base without the change is pre-existing: name the test

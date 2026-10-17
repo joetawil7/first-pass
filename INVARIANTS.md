@@ -92,14 +92,14 @@ holds it today and where it is known to break.
    Known breaks: a finding the review labelled small that is really harm stays small unless
    Jev or the agent sees the harm; Jev leaning toward "small" (as seen in a trial) does not
    clear it, but it does not catch it either.
-12. **The parts runner only ever stops processes it started (by their own pid, with everything they started), only takes a port that nothing answers on and no live run holds, never writes over a file it did not create, never prints a value it reads from an env file, and never calls a part passed unless every step ran, exited 0 and, where the recipe says what a run prints, printed it, and no part it needs was run again while it ran; a part that needs another refuses while that one has not passed on the same checkout with the same inputs.**
+12. **The parts runner only ever stops processes it started (by their own pid, with everything they started), only takes a port that nothing answers on and no live run holds, never writes over a file it did not create, never prints a value it reads from an env file, and never calls a part passed unless every step ran (with `--no-tests`, every step that takes no test list, and the pass then says so and is marked partial), exited 0 and, where the recipe says what a run prints, printed it, and no part it needs was run again while it ran; a part that needs another refuses while that one has not passed on the same checkout with the same inputs.**
    Held by: `stopTree` (Windows: `taskkill /T` only while the root still runs; elsewhere its
    own process group), `takePort`, `portFree`, `lock`, `claimRun`, `readEnvFile`, `notReady`,
    `writeMark`, `Runner.runPart`, `alive` (on Linux a zombie owns nothing) and `procIsOurs` in
    `scripts/lib/parts.mjs`; the recipe is read from the repo's
    own folder, never the checkout under test (`loadRecipe`); `test/parts.test.mjs`.
    A part run through a `partWrapper` passed only when that run wrote its mark (`runWrapped`);
-   a run of chosen tests (`--tests`, checked by `checkTests`) marks its pass as partial, and a part that needs it refuses until it runs whole (`writeMark`, `notReady`);
+   a run of chosen tests (`--tests`, checked by `checkTests`) or of none (`--no-tests`, checked by `checkNoTests`) marks its pass as partial, and a part that needs it refuses until it runs whole (`writeMark`, `notReady`);
    a stopped run asks its wrapped runs to stop through a file, so they clean up (`stopAll`); a
    part killed before its cleanup is cleaned up by the next run of it (`recover`).
    On Linux and macOS its folder in the temp folder is this user's alone, or it is refused

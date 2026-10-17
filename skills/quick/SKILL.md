@@ -46,16 +46,23 @@ those entry points. Where the test runner lists the tests related to changed fil
 `--findRelatedTests`, Vitest's `related`), add its list too. Write the list in the plan. Run the
 chosen files with the commands CI uses for their suites, with the servers and databases those
 suites need. In a repo with a parts recipe, they run through the runner (`ship-check` step 4):
-each part whose steps take a test list (`parts <repo> check` says `takes --tests`) gets its
-chosen files with `--tests <part>=<file>,<file>`, the other chosen parts run whole by name, and
-nothing runs by hand outside it. A chosen file the runner refuses (a path a test runner would
+each part whose steps take a test list (`parts <repo> check` says `takes --tests`) gets the
+chosen files its test-list steps (those with `{{tests}}`) run, with `--tests <part>=<file>,<file>`,
+the other chosen parts run whole by name, and
+nothing runs by hand outside it. When no test that a part's test-list steps (those with
+`{{tests}}`) would run reaches the change, while that part also holds chosen checks (format,
+lint, type and build checks kept in one part with unit tests), it runs with `--no-tests <part>`:
+those steps do not run, its other steps run whole as always, and the report says that part ran
+without its tests. A part the list above runs whole (one reached through shared code when the
+change alters what that code sees, or the whole integration suite for jobs, payments,
+publishing, deletion or auth) runs whole instead. A chosen file the runner refuses (a path a test runner would
 read as a pattern, or one outside the folder the part's tests run in) means that part runs
 whole, never that the file is left out. After a run, check that each chosen file shows in the
 test runner's own result lines in that part's log, named from the folder the runner ran in and
 with either slash (Jest's PASS and FAIL lines, Playwright's lines for that file, the names of
 node --test's tests from it), never in the command line pnpm or npm repeats above them: one that
-does not, did not run. A run that selects no tests is not a pass: fix the selection, or run that part
-whole. When unsure whether a test reaches the change, it runs. Everything else, test files that
+does not, did not run. A test run that selects no tests (the test-list steps a
+`--no-tests` run skips do not count as one) is not a pass: fix the selection, or run that part whole. When unsure whether a test reaches the change, it runs. Everything else, test files that
 reach nothing the change touched, is not run here.
 
 Nothing else changes: the test that fails first, the fresh review, looking at the UI running,
