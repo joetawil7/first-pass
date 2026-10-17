@@ -1,4 +1,4 @@
-<!-- first-pass:machine:start v0.9.2 (written by the setup-first-pass skill from this machine's survey; it describes this machine only and never goes in a file teammates share; re-run setup to refresh it, and put your own notes outside the markers) -->
+<!-- first-pass:machine:start v0.9.3 (written by the setup-first-pass skill from this machine's survey; it describes this machine only and never goes in a file teammates share; re-run setup to refresh it, and put your own notes outside the markers) -->
 
 ## This machine (first-pass)
 

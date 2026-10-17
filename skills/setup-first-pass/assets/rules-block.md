@@ -1,4 +1,4 @@
-<!-- first-pass:rules:start v0.9.2 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
+<!-- first-pass:rules:start v0.9.3 (managed by the setup-first-pass skill: re-run it to update this block; put your own rules outside the markers) -->
 
 ## Working rules (first-pass)
 
@@ -131,8 +131,8 @@ skill has the full procedure.
   it, and the format, lint, type and build checks of the packages it touched. A part it
   reaches through shared code runs whole only when the edit changes what that other code
   sees (a shared package's exports, a migration, a config value, a route's or event's shape).
-  A test run that selects no tests (the test-list steps a quick-mode `--no-tests` run skips do
-  not count as one) is not a pass: fix the selection, or run that part whole. The words, monitoring and
+  A test run that selects no tests (the test-list steps a `--no-tests` run skips do not count
+  as one) is not a pass: fix the selection, or run that part whole. The words, monitoring and
   invariants checks run for what it changed. CI's full checks run once
   more, in the clean checkout holding the final change, unless every part of them has already
   run whole, from start to end, after the final change was copied in, once no review or fix is pending and nothing is left for the user to pick or
@@ -145,7 +145,8 @@ skill has the full procedure.
   not done, and which checks ran on the latest edit. The `review` skill waits for its
   reviewers, as it says. The `quick` skill, typed by the user, turns on quick mode until they
   turn it off: the checks the change can affect stand in for CI's full checks, in (3) too, and
-  the report says the rest of the suite did not run here.
+  their run on the final change is skipped once each of them has already run after it; the
+  report says the rest of the suite did not run here.
 - **UI changes are looked at running.** A change to what a screen shows or how it behaves is
   looked at running before it is called done: the repo's section says how (its UI check: the
   dev server, the spec or the app to open), the machine block says with what (the browsers,

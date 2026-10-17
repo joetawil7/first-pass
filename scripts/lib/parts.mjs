@@ -226,6 +226,11 @@ export function checkNoTests(recipe, names = [], tests = new Map()) {
     if (tests.has(name)) throw new PartsError(`--no-tests names ${name}, which --tests gives files: give it one or the other`);
     if (without.has(name)) throw new PartsError(`--no-tests names ${name} twice`);
     if (first.steps.every((step) => placeholders(step.run).includes('tests'))) throw new PartsError(`--no-tests: every step of ${name} takes the test list, so it would run nothing: leave ${name} out of the run`);
+    // A later step that still runs could read what the skipped one leaves behind, and pass on an
+    // earlier run's.
+    const takes = (step) => placeholders(step.run).includes('tests');
+    const needed = first.steps.find((step, i) => step.required && takes(step) && first.steps.slice(i + 1).some((later) => !takes(later)));
+    if (needed) throw new PartsError(`--no-tests: ${name}'s step ${needed.name} takes the test list and a later step needs it (required), so run ${name} whole`);
     without.add(name);
   }
   return without;
@@ -762,6 +767,8 @@ export class Runner {
       for (const step of part.steps) {
         if (this.stopping) throw new PartsError('stopped');
         if (without && takesTests(step)) {
+          // An earlier run's log would still show its pass in this run's logs folder.
+          fs.writeFileSync(path.join(this.logs, `${part.name}-${step.name}.log`), 'not run (--no-tests)\n');
           this.note(`${part.name} ${step.name}: not run (--no-tests)`);
           continue;
         }

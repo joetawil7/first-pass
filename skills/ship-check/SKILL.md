@@ -110,7 +110,7 @@ them (directly or through their callers), the part that failed when a check led 
 type and build checks of the packages it touched. A part it reaches through shared code runs
 whole only when the edit changes what that other code sees (a shared package's exports, a
 migration, a config value, a route's or event's shape). A test run that selects no tests
-(the test-list steps a quick-mode `--no-tests` run skips do not count as one) is not a pass: fix
+(the test-list steps a `--no-tests` run skips do not count as one) is not a pass: fix
 the selection, or run that part whole. The words, monitoring and invariants checks
 run for what it changed. CI's full checks (step 4) run once more, in the clean checkout
 holding the final change, unless every part of them has already run whole, from start to
@@ -236,8 +236,9 @@ A later edit reruns only the parts it can affect, named instead of `all`. `--tes
 <part>=<file>[,<file>...]` gives a part whose steps take `{{tests}}` only those files (a sharded
 part then runs once), and that run never counts as the part's full pass for a part that needs
 it. `--no-tests <part>` runs a part's other steps without the ones that take `{{tests}}` (a
-sharded part then runs once), for quick mode when none of the tests those steps would run reach
-the change, and that run never counts as the part's full pass either. A part refuses to run
+sharded part then runs once), for a run of chosen checks (quick mode's, or a later edit's rerun)
+when none of the tests those steps would run reach the change, and that run never counts as the
+part's full pass either. A part refuses to run
 while a part it needs has not passed on that worktree with the same inputs. `parts <repo> check`
 lists the parts. It prints its logs folder at the start and the end: read `summary.txt` there, and
 the log of each step that failed. A stopped run cleans up after itself; one killed outright is
@@ -259,7 +260,7 @@ never `all` uncapped.
 
 **Quick mode.** When the user turned it on with `/first-pass:quick` (the task list says
 "Checks: quick"), the checks the change can affect run here instead of the full checks, and
-once more on the final change instead of them, as that skill lists: the format, lint, type and build checks of
+once more on the final change instead of them (unless each already ran after it), as that skill lists: the format, lint, type and build checks of
 the packages it touches; its own tests and the tests of the files it changes; and every unit,
 integration, flow and browser test that reaches the changed code, directly or through its
 callers, or that reads or writes the same data; when the change touches jobs, payments,
@@ -268,11 +269,12 @@ alters what shared code sees. Find them by following the callers out to the rout
 events, commands and screens tests drive, then the tests that reach any of them, plus the test
 runner's list of related tests where it has one; a test run that selects no tests (the
 test-list steps a `--no-tests` run skips do not count as one) is not a pass, and when unsure
-whether a test reaches the change, it runs. In a repo with a parts recipe, they run through the runner: the
-chosen files a part's test-list steps (those with `{{tests}}`) run go to it with `--tests`, and a
-part that holds chosen checks when none of the tests those steps would run reach the change runs
-with `--no-tests` (unless the list above runs it whole, for a change to what shared code sees or
-for jobs, payments, publishing, deletion or auth), as above. The rest of the suite does not run here, and the
+whether a test reaches the change, it runs. In a repo with a parts recipe, they run through the
+runner: a part the list above runs whole (one reached through shared code when the change alters
+what it sees, or the integration suite of a change to jobs, payments, publishing, deletion or
+auth) runs whole; in any other part, the chosen files its test-list steps (those with
+`{{tests}}`) run go to it with `--tests`, and a part that holds chosen checks when none of the
+tests those steps would run reach the change runs with `--no-tests`, as above. The rest of the suite does not run here, and the
 report says so. Every other step runs as written.
 
 A failure that also happens on the base without the change is pre-existing: name the test

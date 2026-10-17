@@ -54,8 +54,8 @@ nothing runs by hand outside it. When no test that a part's test-list steps (tho
 lint, type and build checks kept in one part with unit tests), it runs with `--no-tests <part>`:
 those steps do not run, its other steps run whole as always, and the report says that part ran
 without its tests. A part the list above runs whole (one reached through shared code when the
-change alters what that code sees, or the whole integration suite for jobs, payments,
-publishing, deletion or auth) runs whole instead. A chosen file the runner refuses (a path a test runner would
+change alters what that code sees, or the integration suite of a change to jobs, payments,
+publishing, deletion or auth) runs whole instead of with `--tests` or `--no-tests`. A chosen file the runner refuses (a path a test runner would
 read as a pattern, or one outside the folder the part's tests run in) means that part runs
 whole, never that the file is left out. After a run, check that each chosen file shows in the
 test runner's own result lines in that part's log, named from the folder the runner ran in and

@@ -949,3 +949,42 @@ test('the CLI runs a part without its tests, a sharded one once, and refuses a p
   fs.rmSync(logsDir(f.repo, f.run), { recursive: true, force: true });
   f.cleanup();
 });
+
+test("a step skipped by --no-tests leaves no earlier run's output in its log", async () => {
+  const f = fixture(({ s, dir }) => ({ firstPassParts: 1, stages: [['verify']], parts: { verify: verifyPart(s, dir) } }));
+  const recipe = loadRecipe(f.repo);
+  const whole = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, out: () => {} });
+  assert.equal(await whole.runParts(['verify']), true);
+  const log = path.join(whole.logs, 'verify-units.log');
+  assert.match(fs.readFileSync(log, 'utf8'), /Tests: 1 passed/, 'the whole run wrote its totals');
+  const without = new Runner({ repo: f.repo, checkout: f.co, run: f.run, recipe, noTests: new Set(['verify']), out: () => {} });
+  assert.equal(await without.runParts(['verify']), true);
+  assert.equal(fs.readFileSync(log, 'utf8'), 'not run (--no-tests)\n', 'the skipped step\'s log says so, and the old pass is gone');
+  fs.rmSync(whole.logs, { recursive: true, force: true });
+  f.cleanup();
+});
+
+test('--no-tests is refused when a later step needs the skipped one, and allowed when the needed step comes last', () => {
+  const f = fixture(({ s }) => ({
+    firstPassParts: 1,
+    stages: [['cov', 'last', 'chain']],
+    parts: {
+      cov: { steps: [{ name: 't', run: `${s('pass.js')} {{tests}}`, ran: 'passed', required: true }, { name: 'report', run: s('pass.js') }] },
+      last: { steps: [{ name: 'lint', run: s('pass.js') }, { name: 't', run: `${s('pass.js')} {{tests}}`, ran: 'passed', required: true }] },
+      // Only steps that are skipped too follow the needed one, so none can read what it left.
+      chain: { steps: [{ name: 'lint', run: s('pass.js') }, { name: 'units', run: `${s('pass.js')} {{tests}}`, ran: 'passed', required: true }, { name: 'integ', run: `${s('pass.js')} {{tests}}`, ran: 'passed' }] },
+    },
+  }));
+  const cli = (...args) => spawnSync(process.execPath, [CLI, 'parts', ...args], { encoding: 'utf8', timeout: 60000 });
+  const refused = cli(f.repo, f.co, f.run, 'cov', '--no-tests', 'cov');
+  assert.equal(refused.status, 2, refused.stdout + refused.stderr);
+  assert.match(refused.stderr, /--no-tests: cov's step t takes the test list and a later step needs it \(required\), so run cov whole/);
+  assert.doesNotMatch(refused.stderr, /or with --tests/, 'with no test reaching the change there are no files to give');
+  for (const name of ['last', 'chain']) {
+    const allowed = cli(f.repo, f.co, f.run, name, '--no-tests', name);
+    assert.equal(allowed.status, 0, `${name}: ${allowed.stdout}${allowed.stderr}`);
+    assert.match(allowed.stdout, new RegExp(`=== ${name} passed \\(without its tests\\)`));
+  }
+  fs.rmSync(logsDir(f.repo, f.run), { recursive: true, force: true });
+  f.cleanup();
+});
